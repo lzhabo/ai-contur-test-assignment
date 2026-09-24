@@ -1,10 +1,25 @@
 import { readFile } from "node:fs/promises";
 import { extname, relative, resolve, sep } from "node:path";
-import Fastify from "fastify";
-import { loadAppConfig, TaskListResponseSchema } from "../../shared/index.js";
+import { loadAppConfig } from "../../shared/index.js";
+import { LocalArtifactStore } from "../artifacts/local-store.js";
+import { QuickJsCheckRunner } from "../checks/quickjs-runner.js";
+import { CodexCliPort } from "../codex/cli-port.js";
+import { createHttpApp } from "../http/app.js";
+import { createFakeCodexPort } from "../workflow/fake-codex.js";
+import { createAppService } from "../workflow/service.js";
 
 const config = loadAppConfig();
-const app = Fastify({ logger: true });
+const dataDir = resolve(config.dataDir);
+const artifacts = new LocalArtifactStore(dataDir);
+const service = await createAppService({
+  dataDir,
+  ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: config.executionMode === "fake" ? createFakeCodexPort(config.fakeScenario) : new CodexCliPort() },
+  models: config.models,
+  limits: config.limits,
+  executionMode: config.executionMode,
+});
+const app = createHttpApp(service);
+app.addHook("onClose", async () => service.close());
 const distRoot = resolve(process.cwd(), "dist");
 const mimeTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
@@ -15,11 +30,6 @@ const mimeTypes: Record<string, string> = {
   ".png": "image/png",
   ".svg": "image/svg+xml",
 };
-
-app.get("/api/health", async () => ({ ok: true }));
-
-// E1 placeholder. E2 replaces this with checkpoint-backed task listing.
-app.get("/api/tasks", async () => TaskListResponseSchema.parse({ tasks: [], activeTaskId: null }));
 
 app.setNotFoundHandler(async (request, reply) => {
   if (request.url.startsWith("/api/")) {
@@ -46,4 +56,7 @@ app.setNotFoundHandler(async (request, reply) => {
   }
 });
 
-await app.listen({ host: config.host, port: config.port });
+try { await app.listen({ host: config.host, port: config.port }); }
+catch (error) { await app.close(); throw error; }
+process.once("SIGINT", () => { void app.close(); });
+process.once("SIGTERM", () => { void app.close(); });

@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"01a0d331-7dbb-7673-9055-95dd80095ffb"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; enable `features.code_mode_host` and install `codex-code-mode-host`."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"{\"kind\":\"candidate\",\"functionName\":\"add\",\"solutionTs\":\"export function add(a: number, b: number): number {\\n  return a + b;\\n}\",\"cases\":[{\"name\":\"sum\",\"args\":[2,3],\"expected\":5}]}"}}
+{"type":"turn.completed","usage":{"input_tokens":11091,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":121,"reasoning_output_tokens":55}}

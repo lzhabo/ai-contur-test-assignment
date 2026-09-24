@@ -13,6 +13,8 @@
     "start": "npm run build && node --import tsx src/server/main/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
     "test:workflow-probe": "node --import tsx tests/unit/workflow/sqlite-resume.probe.ts"
   },
   "dependencies": {
@@ -28,6 +30,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@types/node": "26.6.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

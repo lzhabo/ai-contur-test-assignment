@@ -1,0 +1,1 @@
+{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","properties":{"kind":{"type":"string","const":"candidate"},"functionName":{"type":"string"},"solutionTs":{"type":"string"},"casesJson":{"type":"string"}},"required":["kind","functionName","solutionTs","casesJson"],"additionalProperties":false}

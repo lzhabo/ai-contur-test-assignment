@@ -31,6 +31,7 @@ export function App() {
   const [taskId, setTaskId] = useState<string | null>(fromHash);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [serverMode, setServerMode] = useState<'real' | 'fake' | null>(null);
   const [snapshot, setSnapshot] = useState<TaskSnapshotResponse | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,6 +55,7 @@ export function App() {
     return data;
   }, []);
 
+  useEffect(() => { void request('/api/health').then(data => { const mode = (data as { executionMode?: unknown } | null)?.executionMode; if (mode === 'real' || mode === 'fake') setServerMode(mode); }).catch(() => {}); }, []);
   useEffect(() => { const handler = () => { setTaskId(fromHash()); setError(''); }; window.addEventListener('hashchange', handler); return () => window.removeEventListener('hashchange', handler); }, []);
   useEffect(() => { void loadList().catch(e => setError(errorMessage(e))); const timer = setInterval(() => void loadList().catch(() => {}), 5000); return () => clearInterval(timer); }, [loadList]);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
@@ -118,11 +120,12 @@ export function App() {
       <div className="sidebar-footer"><span className="status-dot" />Локальная рабочая папка<br />TypeScript · три агента · две модели</div>
     </aside>
     <main className="main">
-      <header className="topbar"><span className="breadcrumb">Рабочее пространство / {taskId ? 'Задача' : 'Новая задача'}</span><span className="local-badge">НА ВАШЕМ MAC · МОДЕЛИ В ОБЛАКЕ</span></header>
+      <header className="topbar"><span className="breadcrumb">Рабочее пространство / {taskId ? 'Задача' : 'Новая задача'}</span><span className="local-badge">{serverMode === 'fake' ? 'ТЕСТОВЫЙ РЕЖИМ · БЕЗ ОБЛАКА' : 'НА ВАШЕМ MAC · МОДЕЛИ В ОБЛАКЕ'}</span></header>
       <div className="page">
         {error && <div className="notice error page-error" role="alert">{error}<button className="text-button" aria-label="Закрыть сообщение об ошибке" onClick={() => setError('')}>×</button></div>}
         {!taskId ? <>
           <div className="intro"><div className="eyebrow">От идеи к проверенной функции</div><h1>Опишите задачу.<br />Агенты займутся кодом.</h1><p>Автор напишет функцию, ревьюер проверит её и вернёт замечания. Вы просмотрите предложение и решите, сохранять ли результат.</p></div>
+          {serverMode === 'fake' && <div className="notice warning">Тестовый режим: ответы агентов имитируются. Облачные модели не вызываются.</div>}
           {activeId && <div className="notice warning">Сейчас выполняется другая задача. <button className="text-button" onClick={() => { navigate(activeId); setTaskId(activeId); }}>Открыть её →</button></div>}
           <form className="composer" onSubmit={e => { e.preventDefault(); void create(); }}>
             <label htmlFor="task-text">Что должна делать функция?</label>
@@ -135,13 +138,14 @@ export function App() {
           <p className="scope-note">Одна чистая синхронная функция с JSON-входом и результатом. Без сети, файлов и сторонних зависимостей. Для каждой задачи создаётся отдельная папка результата.</p>
         </> : !snapshot ? <div className="empty" role="status">Загружаем сохранённую задачу…</div> : <>
           <div className="task-heading"><div><div className="eyebrow">{PHASES[snapshot.task.phase]}</div><h1>{snapshot.task.title}</h1><p className="task-request">{snapshot.state.taskText}</p></div>{snapshot.actions.canStop && <button className="danger" onClick={() => void stop()} disabled={busy}>Остановить</button>}</div>
+          {snapshot.state.executionMode === 'fake' && <div className="notice warning"><strong>Тестовый режим.</strong> Ответы агентов имитируются локально. Этот прогон проверяет работу приложения, но не подключение к облачным моделям.</div>}
           {!connected && <div className="notice warning" role="status">Нет соединения с потоком событий. Пробуем подключиться снова; показано последнее полученное состояние. Это не подтверждение завершения работы.</div>}
           {snapshot.task.stopReason && <div className={`notice ${snapshot.task.phase === 'completed' ? '' : 'warning'}`}><strong>{PHASES[snapshot.task.phase]}.</strong> {snapshot.task.stopReason}</div>}
           {pending && <div className={`notice ${age >= 30 ? 'warning' : ''}`} role="status"><strong>{ROLES[pending.role]}: ожидаем результат {age} с.</strong><br />Последнее наблюдение: {pending.lastObservedStage || 'Попытка сохранена; подтверждения запуска ещё нет'}.{pending.lastObservedAt && ` ${time(pending.lastObservedAt)}`}<br /><small>Запуск локального процесса сам по себе не подтверждает доставку облачной модели.</small></div>}
           {snapshot.actions.canResume && <div className="notice warning"><strong>Продолжить сохранённую задачу</strong><p>{snapshot.actions.resumeRequiresExplicitRetry ? 'Исход предыдущего вызова неизвестен. Повтор создаст новый вызов модели и потратит ещё одну попытку.' : 'Продолжение начнётся с сохранённого этапа.'}</p><div className="notice-actions"><button onClick={() => void resume()} disabled={busy}>{snapshot.actions.resumeRequiresExplicitRetry ? 'Повторить неизвестный вызов' : 'Продолжить'}</button></div></div>}
           <div className="roles">{(['author', 'reviewer', 'applier'] as const).map((role, index) => { const active = pending?.role === role; return <article className={`role ${active ? 'active' : ''}`} key={role}><div className="role-head"><span className="role-num">0{index + 1}</span><div><h3>{ROLES[role]}</h3><div className="role-model mono">{snapshot.state.models[role]}</div></div></div><div className="role-status">{roleStatus(role, snapshot.task.phase, active)}</div></article>; })}</div>
           <div className="task-columns">
-            <section className="panel"><div className="panel-head"><h2>Ход работы</h2><small>{snapshot.state.usedModelCalls} / {snapshot.state.maxModelCalls} вызовов</small></div><div className="timeline" aria-label="Сообщения агентов">{snapshot.events.length ? [...new Map(snapshot.events.map(event => [event.eventId, event])).values()].sort((a,b) => a.sequence - b.sequence).map(event => <EventRow key={event.eventId} event={event} />) : <p className="empty">Задача принята. Ожидаем первые события.</p>}</div></section>
+            <section className="panel"><div className="panel-head"><h2>Ход работы</h2><small>{snapshot.state.usedModelCalls} / {snapshot.state.maxModelCalls} вызовов</small></div><Timeline events={snapshot.events} /></section>
             <section className="panel"><div className="panel-head"><h2>{snapshot.task.phase === 'completed' ? 'Результат' : 'Предложение'}</h2><small>Версия {snapshot.state.createdVersions} / {snapshot.state.maxVersions}</small></div><Files snapshot={snapshot} />
               {snapshot.state.latestChecks && <div className="approval"><h3>Проверки: {snapshot.state.latestChecks.status === 'passed' ? 'пройдены' : 'есть ошибки'}</h3><div className="checks"><p>TypeScript: {snapshot.state.latestChecks.compilationStatus === 'passed' ? 'без ошибок' : snapshot.state.latestChecks.compilationStatus}</p><p>Тесты: {snapshot.state.latestChecks.passedCases} пройдено · {snapshot.state.latestChecks.failedCases} не пройдено</p>{snapshot.state.latestChecks.diagnostics.map((message, index) => <p key={index}>{message}</p>)}</div></div>}
               {snapshot.state.latestReview && <div className="approval"><h3>{snapshot.state.latestReview.verdict === 'approved' ? 'Ревьюер одобрил версию' : 'Замечания ревьюера'}</h3>{snapshot.state.latestReview.findings.map((finding, index) => <p className="review-summary" key={index}>{finding}</p>)}</div>}
@@ -178,4 +182,12 @@ function Result({ path, taskId }: { path: string; taskId: string }) {
   const [error, setError] = useState('');
   const copy = async () => { try { await navigator.clipboard.writeText(path); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setError('Не удалось скопировать автоматически. Выделите путь и скопируйте его.'); } };
   return <div className="approval"><h3>Файлы сохранены</h3><code className="result-path">{path}</code><div className="notice-actions"><button onClick={() => void copy()}>{copied ? 'Путь скопирован' : 'Скопировать путь'}</button><a href={`/api/tasks/${encodeURIComponent(taskId)}/result.zip`} download>Скачать комплект ZIP ↓</a></div>{error && <p role="alert">{error}</p>}</div>;
+}
+
+function Timeline({ events }: { events: TaskEvent[] }) {
+  const container = useRef<HTMLDivElement>(null);
+  const follow = useRef(true);
+  const ordered = [...new Map(events.map(event => [event.eventId, event])).values()].sort((a, b) => a.sequence - b.sequence);
+  useEffect(() => { if (container.current && follow.current) container.current.scrollTop = container.current.scrollHeight; }, [events.length]);
+  return <div ref={container} className="timeline" aria-label="Сообщения агентов" onScroll={() => { const element = container.current; if (element) follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 70; }}>{ordered.length ? ordered.map(event => <EventRow key={event.eventId} event={event} />) : <p className="empty">Задача принята. Ожидаем первые события.</p>}</div>;
 }
