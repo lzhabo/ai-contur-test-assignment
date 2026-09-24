@@ -44,6 +44,10 @@ export function createHttpApp(service: AppService): FastifyInstance {
     if (!Number.isSafeInteger(after) || after < 0) throw new ServiceError(400, "invalid_cursor", "Некорректный курсор событий.");
     reply.hijack();
     reply.raw.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" });
+    // Open EventSource immediately even when the client is already at the
+    // latest cursor and no task event is available until the next heartbeat.
+    reply.raw.flushHeaders();
+    reply.raw.write(": connected\n\n");
     let seen = after;
     let ready = false;
     const pending: Array<{ sequence: number; data: string }> = [];

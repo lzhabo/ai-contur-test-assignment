@@ -4,10 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { LocalArtifactStore } from "../../../src/server/artifacts/local-store.js";
 import { QuickJsCheckRunner } from "../../../src/server/checks/quickjs-runner.js";
+import type { JsonValue } from "../../../src/shared/contracts.js";
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
-async function run(solutionTs: string, expected: number | null = 5) {
+async function run(solutionTs: string, expected: JsonValue = 5) {
   const root = await mkdtemp(path.join(os.tmpdir(), "check-test-"));
   roots.push(root);
   const store = new LocalArtifactStore(root);
@@ -57,6 +58,37 @@ describe("isolated TypeScript checks", () => {
   it("interrupts an infinite loop", async () => {
     const result = await run("export function add(a: number, b: number): number { while (true) {} }");
     expect(result.tests.status).toBe("timeout");
+  });
+
+  it("does not trust candidate replacements of JSON.stringify or verifier globals", async () => {
+    const result = await run(`export function add(a: number, b: number): number {
+      JSON.stringify = (() => '5') as typeof JSON.stringify;
+      (globalThis as any).__result = 5;
+      (globalThis as any).__args = [2, 3];
+      return 999;
+    }`);
+    expect(result.compilation.status).toBe("passed");
+    expect(result.tests.status).toBe("failed");
+    expect(result.passedCases).toBe(0);
+  });
+
+  it("does not invoke candidate toJSON or getters to obtain a passing result", async () => {
+    for (const source of [
+      "export function add(): any { return { toJSON() { return 5; } }; }",
+      "export function add(): any { return { get value() { while (true) {} } }; }",
+    ]) {
+      const result = await run(source);
+      expect(result.compilation.status).toBe("passed");
+      expect(result.tests.status).toBe("failed");
+      expect(result.passedCases).toBe(0);
+    }
+  });
+
+  it("rejects Proxy traps that misrepresent returned values", async () => {
+    const result = await run("export function add(): any { return new Proxy({ value: 999 }, { getOwnPropertyDescriptor() { return { value: 5, enumerable: true, configurable: true, writable: true }; } }); }", { value: 5 });
+    expect(result.compilation.status).toBe("passed");
+    expect(result.tests.status).toBe("failed");
+    expect(result.passedCases).toBe(0);
   });
 
   it("reports cyclic output as a failed JSON check", async () => {

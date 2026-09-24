@@ -34,7 +34,7 @@ describe("immutable artifacts", () => {
     const compilerOptions: ts.CompilerOptions = { noEmit: true, strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, allowImportingTsExtensions: true, types: ["node"], typeRoots: [path.join(process.cwd(), "node_modules", "@types")] };
     const program = ts.createProgram([path.join(first.resultPath, "solution.ts"), path.join(first.resultPath, "solution.test.ts")], compilerOptions);
     expect(ts.getPreEmitDiagnostics(program).map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"))).toEqual([]);
-  });
+  }, 15_000); // Includes a separate Node test process and a full TypeScript program.
 
   it("rejects stale approval, tampering, traversal and symlinked parents", async () => {
     const { root, artifacts } = await store();

@@ -97,6 +97,7 @@ export function App() {
     if (!input) throw new Error('Опишите функцию или выберите пример.');
     if (!createAttempt.current || createAttempt.current.text !== input) createAttempt.current = { text: input, key: crypto.randomUUID() };
     const data = await post('/api/tasks', { text: input }, { 'Idempotency-Key': createAttempt.current.key }) as { taskId: string };
+    createAttempt.current = null; // A successful creation consumes the key; retries after failures retain it.
     navigate(data.taskId); setTaskId(data.taskId);
   });
   const decide = (decision: 'approve' | 'reject') => perform(async () => {
@@ -141,7 +142,7 @@ export function App() {
           {snapshot.state.executionMode === 'fake' && <div className="notice warning"><strong>Тестовый режим.</strong> Ответы агентов имитируются локально. Этот прогон проверяет работу приложения, но не подключение к облачным моделям.</div>}
           {!connected && <div className="notice warning" role="status">Нет соединения с потоком событий. Пробуем подключиться снова; показано последнее полученное состояние. Это не подтверждение завершения работы.</div>}
           {snapshot.task.stopReason && <div className={`notice ${snapshot.task.phase === 'completed' ? '' : 'warning'}`}><strong>{PHASES[snapshot.task.phase]}.</strong> {snapshot.task.stopReason}</div>}
-          {pending && <div className={`notice ${age >= 30 ? 'warning' : ''}`} role="status"><strong>{ROLES[pending.role]}: ожидаем результат {age} с.</strong><br />Последнее наблюдение: {pending.lastObservedStage || 'Попытка сохранена; подтверждения запуска ещё нет'}.{pending.lastObservedAt && ` ${time(pending.lastObservedAt)}`}<br /><small>Запуск локального процесса сам по себе не подтверждает доставку облачной модели.</small></div>}
+          {pending && <div className={`notice ${age >= 30 ? 'warning' : ''}`} role="status"><strong>{ROLES[pending.role]}: ожидаем результат {age} с.</strong>{age >= 30 && <p>Ответ пока не получен. Можно продолжать ждать или остановить задачу.</p>}<br />Последнее наблюдение: {pending.lastObservedStage || 'Попытка сохранена; подтверждения запуска ещё нет'}.{pending.lastObservedAt && ` ${time(pending.lastObservedAt)}`}<br /><small>Запуск локального процесса сам по себе не подтверждает доставку облачной модели.</small></div>}
           {snapshot.actions.canResume && <div className="notice warning"><strong>Продолжить сохранённую задачу</strong><p>{snapshot.actions.resumeRequiresExplicitRetry ? 'Исход предыдущего вызова неизвестен. Повтор создаст новый вызов модели и потратит ещё одну попытку.' : 'Продолжение начнётся с сохранённого этапа.'}</p><div className="notice-actions"><button onClick={() => void resume()} disabled={busy}>{snapshot.actions.resumeRequiresExplicitRetry ? 'Повторить неизвестный вызов' : 'Продолжить'}</button></div></div>}
           <div className="roles">{(['author', 'reviewer', 'applier'] as const).map((role, index) => { const active = pending?.role === role; return <article className={`role ${active ? 'active' : ''}`} key={role}><div className="role-head"><span className="role-num">0{index + 1}</span><div><h3>{ROLES[role]}</h3><div className="role-model mono">{snapshot.state.models[role]}</div></div></div><div className="role-status">{roleStatus(role, snapshot.task.phase, active)}</div></article>; })}</div>
           <div className="task-columns">

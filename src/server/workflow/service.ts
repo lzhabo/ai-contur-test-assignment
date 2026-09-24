@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { Command } from "@langchain/langgraph";
 import { CreateTaskRequestSchema, DecisionRequestSchema, ResumeRequestSchema, TaskSnapshotResponseSchema, type DecisionRequest, type ResumeRequest, type TaskListResponse, type TaskSnapshotResponse, type TaskSummary } from "../../shared/api.js";
@@ -131,6 +131,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
   async function snapshot(taskId: string): Promise<TaskSnapshotResponse> {
     const loaded = await stateOf(taskId);
     const state = await ensureCompletedIntegrity(taskId, loaded.state);
+    const modeMismatch = state.executionMode !== executionMode;
     const entry = index.tasks.find(task => task.taskId === taskId)!;
     const taskEvents = await events.readAfter(taskId, 0);
     const lastObserved = [...taskEvents].reverse().find(event => event.type === "attempt_observed" && event.attemptId === state.activeAttempt?.attemptId);
@@ -138,11 +139,11 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
       attemptId: state.activeAttempt.attemptId, role: state.activeAttempt.role, modelId: state.activeAttempt.modelId,
       startedAt: state.activeAttempt.startedAt, lastObservedAt: lastObserved?.at ?? null, lastObservedStage: lastObserved?.text ?? null,
     } : null;
-    const canDecide = state.phase === "awaiting_approval" && state.latestReview?.verdict === "approved" && state.latestChecks?.compilation.status === "passed" && state.latestChecks.tests.status === "passed" && !pendingDecisions.has(taskId);
+    const canDecide = !modeMismatch && state.phase === "awaiting_approval" && state.latestReview?.verdict === "approved" && state.latestChecks?.compilation.status === "passed" && state.latestChecks.tests.status === "passed" && !pendingDecisions.has(taskId);
     const files = state.currentArtifact?.files.map(file => ({ ...file, versionId: state.currentArtifact!.versionId, published: state.phase === "completed" })) ?? [];
     const check = state.latestChecks;
     const checkStatus = check ? check.compilation.status !== "passed" ? check.compilation.status : check.tests.status : null;
-    const summary: TaskSummary = { taskId, title: entry.title, phase: state.phase, createdAt: state.createdAt, updatedAt: state.updatedAt, currentVersionId: state.currentArtifact?.versionId ?? null, stopReason: state.stopReason };
+    const summary: TaskSummary = { taskId, title: entry.title, phase: state.phase, createdAt: state.createdAt, updatedAt: state.updatedAt, currentVersionId: state.currentArtifact?.versionId ?? null, stopReason: modeMismatch && !terminal.has(state.phase) ? `Задача сохранена в режиме ${state.executionMode}; текущий сервер запущен в режиме ${executionMode}. Для продолжения вернитесь к исходному режиму.` : state.stopReason };
     return TaskSnapshotResponseSchema.parse({
       task: summary,
       state: {
@@ -152,7 +153,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
         latestChecks: check ? { versionId: check.versionId, status: checkStatus, compilationStatus: check.compilation.status, testsStatus: check.tests.status, passedCases: check.passedCases, failedCases: check.failedCases, diagnostics: [...check.compilation.details, ...check.tests.details] } : null,
         activeAttempt, usedModelCalls: state.usedModelCalls, maxModelCalls: state.limits.maxModelCalls, createdVersions: state.createdVersions, maxVersions: state.limits.maxVersions, resultPath: state.resultPath,
       },
-      actions: { canStop: !terminal.has(state.phase), canDecide, canResume: state.phase === "unknown_outcome" && state.executionMode === executionMode, resumeRequiresExplicitRetry: state.phase === "unknown_outcome" },
+      actions: { canStop: !terminal.has(state.phase), canDecide, canResume: state.phase === "unknown_outcome" && !modeMismatch, resumeRequiresExplicitRetry: state.phase === "unknown_outcome" },
       files, events: taskEvents, lastEventSequence: taskEvents.at(-1)?.sequence ?? 0,
     });
   }
@@ -163,7 +164,8 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     for (const entry of index.tasks) {
       const loaded = await stateOf(entry.taskId);
       const state = await ensureCompletedIntegrity(entry.taskId, loaded.state);
-      tasks.push({ taskId: entry.taskId, title: entry.title, phase: state.phase, createdAt: state.createdAt, updatedAt: state.updatedAt, currentVersionId: state.currentArtifact?.versionId ?? null, stopReason: state.stopReason });
+      const modeMismatch = state.executionMode !== executionMode;
+      tasks.push({ taskId: entry.taskId, title: entry.title, phase: state.phase, createdAt: state.createdAt, updatedAt: state.updatedAt, currentVersionId: state.currentArtifact?.versionId ?? null, stopReason: modeMismatch && !terminal.has(state.phase) ? `Задача сохранена в режиме ${state.executionMode}; текущий сервер запущен в режиме ${executionMode}.` : state.stopReason });
       if (!terminal.has(state.phase)) activeTaskId = entry.taskId;
     }
     return { tasks: tasks.reverse(), activeTaskId };
@@ -198,6 +200,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
   async function decideInternal(taskId: string, input: DecisionRequest): Promise<TaskSnapshotResponse> {
     const parsed = DecisionRequestSchema.parse(input);
     const { state } = await stateOf(taskId);
+    if (state.executionMode !== executionMode) throw new ServiceError(409, "mode_mismatch", "Режим сохранённой задачи отличается от текущего режима сервера.");
     const pending = pendingDecisions.get(taskId);
     if (pending && pending.decisionId === parsed.decisionId && pending.decision === parsed.decision && pending.versionId === parsed.versionId && pending.manifestHash === parsed.manifestHash) return snapshot(taskId);
     if (state.approval && state.approval.decisionId === parsed.decisionId && state.approval.decision === parsed.decision && state.approval.versionId === parsed.versionId && state.approval.manifestHash === parsed.manifestHash) return snapshot(taskId);
@@ -253,6 +256,9 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     if (!ref || !file) throw new ServiceError(404, "artifact_not_found", "Файл не найден в текущей версии задачи.");
     await ports.artifacts.verifyVersion(ref);
     const result = await ports.artifacts.getFile(taskId, artifactId, state.phase === "completed" ? "result" : "revision");
+    if (result.metadata.artifactId !== file.artifactId || result.metadata.path !== file.path || result.metadata.sha256 !== file.sha256 || result.metadata.bytes !== file.bytes || createHash("sha256").update(result.content).digest("hex") !== file.sha256 || Buffer.byteLength(result.content) !== file.bytes) {
+      throw new ServiceError(409, "artifact_changed", "Файл не совпадает с сохранённой одобренной версией.");
+    }
     return { content: result.content, path: result.metadata.path };
   }
 
@@ -274,6 +280,32 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
   for (const entry of index.tasks) {
     const { state, next } = await stateOf(entry.taskId);
     const pendingNode = next[0];
+    // A different adapter mode may inspect history, but must never continue a
+    // pending real task with fake output (or the reverse).
+    if (state.executionMode !== executionMode) continue;
+    if (pendingNode === "callApplier" && state.activeAttempt && state.currentArtifact && state.approval?.decision === "approve") {
+      const resultPath = join(dataDir, "tasks", entry.taskId, "result");
+      let resultExists = false;
+      try { await lstat(resultPath); resultExists = true; }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+      if (resultExists) {
+        try {
+          await ports.artifacts.verifyVersion(state.currentArtifact);
+          await ports.artifacts.getResultZip(entry.taskId, state.currentArtifact);
+          const completedAttempt = { ...state.activeAttempt, status: "completed" as const, endedAt: now() };
+          const completed: TaskState = { ...state, phase: "completed", resultPath, activeAttempt: null, lastAttempt: completedAttempt, updatedAt: now() };
+          await graph.updateState(config(entry.taskId), { value: completed }, "callApplier");
+          await events.append({ taskId: entry.taskId, eventId: `${entry.taskId}:${completedAttempt.attemptId}:published`, at: now(), type: "publication_finished", from: "applier", to: "user", attemptId: completedAttempt.attemptId, text: "Одобренная версия восстановлена по опубликованным файлам.", artifactVersionId: state.currentArtifact.versionId, source: "recovery" });
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          const failedAttempt = { ...state.activeAttempt, status: "failed" as const, endedAt: now(), error: reason };
+          const broken: TaskState = { ...state, phase: "error", stopReason: `Опубликованный результат повреждён после сбоя: ${reason}`, activeAttempt: null, lastAttempt: failedAttempt, updatedAt: now() };
+          await graph.updateState(config(entry.taskId), { value: broken }, "callApplier");
+          await events.append({ taskId: entry.taskId, eventId: `${entry.taskId}:${failedAttempt.attemptId}:published-corrupt`, at: now(), type: "task_failed", from: "system", to: "user", attemptId: failedAttempt.attemptId, text: broken.stopReason!, artifactVersionId: state.currentArtifact.versionId, source: "recovery" });
+        }
+        continue;
+      }
+    }
     if (pendingNode && externalNodes.has(pendingNode) && state.activeAttempt) {
       const lastAttempt = { ...state.activeAttempt, status: "unknown" as const, endedAt: now(), error: "Backend stopped before the external call outcome was checkpointed." };
       const unknown: TaskState = { ...state, phase: "unknown_outcome", stopReason: "Исход внешнего вызова после перезапуска неизвестен.", activeAttempt: null, lastAttempt, updatedAt: now() };

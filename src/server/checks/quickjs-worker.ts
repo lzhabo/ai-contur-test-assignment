@@ -4,6 +4,7 @@ import { realpathSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { getQuickJS } from "quickjs-emscripten";
+import { JsonBridge } from "./json-bridge.ts";
 
 interface Case { name: string; args: unknown[]; expected: unknown }
 interface Input { solutionTs: string; functionName: string; cases: Case[]; deadline: number; memoryLimitBytes: number }
@@ -64,32 +65,38 @@ async function run(): Promise<Result> {
     runtime.setMaxStackSize(Math.min(1024 * 1024, Math.floor(input.memoryLimitBytes / 8)));
     runtime.setInterruptHandler(() => Date.now() >= input.deadline);
     const context = runtime.newContext();
+    const bridge = new JsonBridge(context, input.deadline);
     try {
-      const script = `var exports = {};\n${emitted}\nvar __args = ${JSON.stringify(testCase.args)}; var __before = JSON.stringify(__args); var __result = exports[${JSON.stringify(input.functionName)}](...__args); if (JSON.stringify(__args) !== __before) throw new Error('input mutated'); JSON.stringify(__result, function (_key, value) { if ((typeof value === 'number' && !Number.isFinite(value)) || ['undefined', 'function', 'symbol', 'bigint'].includes(typeof value)) throw new Error('non-JSON result'); return value; });`;
-      const result = context.evalCode(script);
-      if (result.error) {
-        const error = context.dump(result.error) as { name?: string; message?: string };
-        result.error.dispose();
-        failedCases++;
-        if (Date.now() >= input.deadline || /interrupted/i.test(error.message ?? "")) testStatus = "timeout";
-        else testStatus = "failed";
-        details.push(`${testCase.name}: ${error.name ?? "Error"}: ${error.message ?? "unknown"}`);
-      } else {
-        const text = context.dump(result.value);
-        result.value.dispose();
-        if (typeof text !== "string" || Buffer.byteLength(text) > 64 * 1024) {
-          failedCases++;
-          testStatus = "failed";
-          details.push(`${testCase.name}: result is not bounded JSON`);
-        } else {
+      // Proxy traps can lie about own-property descriptors while ordinary reads
+      // return different values. This JSON-only runtime does not expose Proxy.
+      context.unwrapResult(context.evalCode('Object.defineProperty(globalThis, "Proxy", { value: undefined, writable: false, configurable: false })')).dispose();
+      // Parse arguments with pristine intrinsics before loading candidate code; handles
+      // and the expected values remain in the host, never in guest global variables.
+      const args = context.unwrapResult(context.evalCode(`JSON.parse(${JSON.stringify(JSON.stringify(testCase.args))})`));
+      try {
+        const loaded = context.unwrapResult(context.evalCode(`var exports = {};\n${emitted}`));
+        loaded.dispose();
+        const exports = context.getProp(context.global, "exports");
+        const fn = context.getProp(exports, input.functionName);
+        exports.dispose();
+        const argHandles = testCase.args.map((_, index) => context.getProp(args, index));
+        try {
+          const result = context.unwrapResult(context.callFunction(fn, context.undefined, argHandles));
           try {
-            const actual = JSON.parse(text) as unknown;
+            const after = bridge.read(args);
+            if (!isDeepStrictEqual(after, testCase.args)) throw new Error("input mutated");
+            const actual = bridge.read(result);
             if (isDeepStrictEqual(actual, testCase.expected)) passedCases++;
-            else { failedCases++; testStatus = "failed"; details.push(`${testCase.name}: expected ${JSON.stringify(testCase.expected)}, got ${text}`); }
-          } catch { failedCases++; testStatus = "failed"; details.push(`${testCase.name}: invalid JSON result`); }
-        }
-      }
-    } finally { context.dispose(); runtime.dispose(); }
+            else { failedCases++; testStatus = "failed"; details.push(`${testCase.name}: returned value does not match expected JSON`); }
+          } finally { result.dispose(); }
+        } finally { fn.dispose(); argHandles.forEach(handle => handle.dispose()); }
+      } finally { args.dispose(); }
+    } catch (error) {
+      failedCases++;
+      const message = error instanceof Error ? error.message : String(error);
+      testStatus = Date.now() >= input.deadline || /interrupted/i.test(message) ? "timeout" : "failed";
+      details.push(`${testCase.name}: ${message.slice(0, 500)}`);
+    } finally { bridge.dispose(); context.dispose(); runtime.dispose(); }
     if (testStatus === "timeout") break;
   }
   return { compilation: { status: "passed", details: [] }, tests: { status: testStatus, details: details.slice(0, 30) }, passedCases, failedCases: failedCases + (testStatus === "timeout" ? input.cases.length - passedCases - failedCases : 0) };
