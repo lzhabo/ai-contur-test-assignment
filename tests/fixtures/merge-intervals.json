@@ -1,0 +1,411 @@
+{
+  "fixtureVersion": 1,
+  "functionName": "mergeIntervals",
+  "rule": "Closed finite numeric pairs; sort by start then end; merge overlap and touching; do not mutate input; any invalid interval or invalid outer input returns [].",
+  "cases": [
+    {
+      "name": "empty",
+      "args": [
+        []
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "single",
+      "args": [
+        [
+          [
+            1,
+            2
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          2
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "unsorted-disjoint",
+      "args": [
+        [
+          [
+            8,
+            9
+          ],
+          [
+            1,
+            2
+          ],
+          [
+            4,
+            5
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          2
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          8,
+          9
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "overlap",
+      "args": [
+        [
+          [
+            1,
+            4
+          ],
+          [
+            2,
+            6
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          6
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "touching",
+      "args": [
+        [
+          [
+            1,
+            2
+          ],
+          [
+            2,
+            3
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          3
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "nested",
+      "args": [
+        [
+          [
+            1,
+            10
+          ],
+          [
+            3,
+            4
+          ],
+          [
+            2,
+            9
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          10
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "bridge-unsorted",
+      "args": [
+        [
+          [
+            5,
+            8
+          ],
+          [
+            1,
+            3
+          ],
+          [
+            3,
+            5
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          8
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "same-start",
+      "args": [
+        [
+          [
+            2,
+            8
+          ],
+          [
+            2,
+            3
+          ],
+          [
+            2,
+            5
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          2,
+          8
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "duplicate",
+      "args": [
+        [
+          [
+            1,
+            3
+          ],
+          [
+            1,
+            3
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          3
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "points",
+      "args": [
+        [
+          [
+            2,
+            2
+          ],
+          [
+            1,
+            1
+          ],
+          [
+            2,
+            3
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          3
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "negative-and-fraction",
+      "args": [
+        [
+          [
+            0,
+            0.5
+          ],
+          [
+            -3,
+            -1
+          ],
+          [
+            -1,
+            0
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          -3,
+          0.5
+        ]
+      ],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "not-array",
+      "args": [
+        null
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "object",
+      "args": [
+        {}
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "string",
+      "args": [
+        "1,2"
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "pair-not-list",
+      "args": [
+        [
+          1,
+          2
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "short-pair",
+      "args": [
+        [
+          [
+            1
+          ]
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "long-pair",
+      "args": [
+        [
+          [
+            1,
+            2,
+            3
+          ]
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "reversed",
+      "args": [
+        [
+          [
+            4,
+            2
+          ]
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "string-bound",
+      "args": [
+        [
+          [
+            "1",
+            2
+          ]
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "null-bound",
+      "args": [
+        [
+          [
+            null,
+            2
+          ]
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "boolean-bound",
+      "args": [
+        [
+          [
+            false,
+            2
+          ]
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "null-interval",
+      "args": [
+        [
+          null
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    },
+    {
+      "name": "one-invalid-invalidates-all",
+      "args": [
+        [
+          [
+            1,
+            2
+          ],
+          [
+            4,
+            3
+          ],
+          [
+            5,
+            6
+          ]
+        ]
+      ],
+      "expected": [],
+      "assertInputUnchanged": true
+    }
+  ]
+}

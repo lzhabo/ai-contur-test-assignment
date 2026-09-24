@@ -7,8 +7,10 @@
     "node": ">=26.0.0"
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run start",
+    "web:dev": "vite",
     "build": "vite build",
+    "start": "npm run build && node --import tsx src/server/main/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:workflow-probe": "node --import tsx tests/unit/workflow/sqlite-resume.probe.ts"
@@ -19,6 +21,7 @@
     "@langchain/langgraph-checkpoint": "1.1.5",
     "@langchain/langgraph-checkpoint-sqlite": "1.0.4",
     "fastify": "5.12.5",
+    "fflate": "0.8.3",
     "quickjs-emscripten": "0.32.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",

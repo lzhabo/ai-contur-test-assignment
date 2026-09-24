@@ -1,0 +1,22 @@
+{
+  "fixtureVersion": 1,
+  "criteria": [
+    "A-04"
+  ],
+  "sentinel": "QA_ARCHIVE_ONLY_7f51ce40_DO_NOT_INCLUDE_IN_NEXT_INPUT",
+  "archiveRecipe": {
+    "placement": "early obsolete message only",
+    "paddingAscii": "old message already superseded. ",
+    "minimumArchiveBytes": 196609,
+    "mustExceedConfiguredContextBudget": true
+  },
+  "currentRelevantText": "Merge closed finite intervals; touching endpoints merge; do not mutate input.",
+  "assertions": [
+    "Archive size exceeds configured prompt byte budget",
+    "Sentinel absent from next adapter input after restart",
+    "Current relevant task and latest revision/review are present",
+    "Full archive unavailable via process working directory or inherited session",
+    "Prompt byte size within configured limit"
+  ],
+  "note": "Recipe materialized by future fixture loader. No huge archive checked in; sentinel is neither a secret nor a user instruction."
+}

@@ -1,0 +1,42 @@
+{
+  "fixtureVersion": 1,
+  "purpose": "A-08 / N-11: deliberately bad author output; fixture source must only be executed by approved isolated runner.",
+  "functionName": "mergeIntervals",
+  "source": "export function mergeIntervals(intervals: number[][]): number[][] { return intervals.map(pair => [...pair]); }\n",
+  "selfTests": [
+    {
+      "name": "empty",
+      "args": [
+        []
+      ],
+      "expected": []
+    },
+    {
+      "name": "single",
+      "args": [
+        [
+          [
+            1,
+            2
+          ]
+        ]
+      ],
+      "expected": [
+        [
+          1,
+          2
+        ]
+      ]
+    }
+  ],
+  "independentFailureCases": [
+    "unsorted-disjoint",
+    "overlap",
+    "touching",
+    "nested",
+    "bridge-unsorted",
+    "duplicate",
+    "reversed"
+  ],
+  "expected": "Author self-tests pass; independent named cases fail. This is an expectation, not an executed result."
+}

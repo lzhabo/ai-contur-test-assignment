@@ -1,0 +1,47 @@
+{
+  "fixtureVersion": 1,
+  "note": "Declarative test intent only; not Codex events, response schema, HTTP contract or an executable fake adapter. E1 binds these to actual contracts.",
+  "scenarios": [
+    {
+      "id": "endless-reviewer",
+      "criteria": [
+        "A-02"
+      ],
+      "behavior": "Every review requests changes with the same issue: touching intervals must merge. Author provides a new candidate each permitted round.",
+      "assertions": [
+        "No publication",
+        "Saved call/version budgets stop further calls",
+        "Restart before exhaustion preserves consumed budget",
+        "Explicit limit reason, not success"
+      ]
+    },
+    {
+      "id": "no-first-event",
+      "criteria": [
+        "A-03",
+        "A-04"
+      ],
+      "behavior": "Attempt is durably prepared; external process never emits an acknowledgement or final response.",
+      "assertions": [
+        "No cloud-delivered claim",
+        "Waiting age increases",
+        "Timeout/stop ends process group",
+        "Restart marks unresolved outcome explicitly"
+      ]
+    },
+    {
+      "id": "no-final-response",
+      "criteria": [
+        "A-03",
+        "A-04"
+      ],
+      "behavior": "Emit only the E1-defined local process acknowledgement, then withhold final response.",
+      "assertions": [
+        "Local acknowledgement not labelled cloud receipt",
+        "Waiting age survives restart",
+        "No success or result publication",
+        "Unknown outcome requires explicit retry decision"
+      ]
+    }
+  ]
+}
