@@ -66,8 +66,15 @@ it('A-03/A-09: SSE streams a new live event then replays only events after Last-
   const second = await service.events.append({ taskId, eventId: 'qa-after-disconnect', at: new Date().toISOString(), type: 'message', from: 'reviewer', to: 'author', attemptId: null, text: 'QA_REPLAY_EVENT', artifactVersionId: null, source: 'qa' });
   const reconnect = new AbortController(); aborts.push(reconnect);
   const replay = await deadline(fetch(`${address}/api/tasks/${taskId}/events?after=0`, { headers: { 'Last-Event-ID': String(live.sequence) }, signal: reconnect.signal }));
-  const piece = await deadline(replay.body!.getReader().read());
-  const replayText = new TextDecoder().decode(piece.value);
+  const replayReader = replay.body!.getReader();
+  let replayText = '';
+  await deadline((async () => {
+    while (!replayText.includes('QA_REPLAY_EVENT') || !replayText.endsWith('\n\n')) {
+      const piece = await replayReader.read();
+      if (piece.done) throw new Error('SSE closed before replay event');
+      replayText += new TextDecoder().decode(piece.value);
+    }
+  })());
   expect(replayText).toContain('QA_REPLAY_EVENT');
   expect(replayText).toContain(`id: ${second.sequence}`);
   expect(replayText).not.toContain('QA_LIVE_EVENT');
