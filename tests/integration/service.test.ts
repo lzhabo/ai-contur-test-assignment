@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { createAppService, type AppService } from '../../src/server/workflow/service.js';
-import { createFakeCodexPort } from '../../src/server/workflow/fake-codex.js';
+import { createFakeCodexPort } from '../../src/server/codex/fake-port.js';
 import { LocalArtifactStore } from '../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../src/server/checks/quickjs-runner.js';
 import { DEFAULT_LIMITS, type DecisionRequest, type TaskSnapshotResponse, type CodexRunRequest } from '../../src/shared/index.js';

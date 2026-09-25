@@ -6,7 +6,7 @@ import { afterEach, expect, it } from "vitest";
 import { LocalArtifactStore } from "../../../src/server/artifacts/local-store.js";
 import { QuickJsCheckRunner } from "../../../src/server/checks/quickjs-runner.js";
 import { EventJournal } from "../../../src/server/events/journal.js";
-import { createFakeCodexPort } from "../../../src/server/workflow/fake-codex.js";
+import { createFakeCodexPort } from "../../../src/server/codex/fake-port.js";
 import { createTaskGraph } from "../../../src/server/workflow/graph.js";
 import { createAppService, type AppService } from "../../../src/server/workflow/service.js";
 import { TaskStateSchema, type CodexPort } from "../../../src/shared/index.js";

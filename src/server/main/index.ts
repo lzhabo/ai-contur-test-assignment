@@ -5,21 +5,28 @@ import { LocalArtifactStore } from "../artifacts/local-store.js";
 import { QuickJsCheckRunner } from "../checks/quickjs-runner.js";
 import { CodexCliPort } from "../codex/cli-port.js";
 import { createHttpApp } from "../http/app.js";
-import { createFakeCodexPort } from "../workflow/fake-codex.js";
+import { createFakeCodexPort } from "../codex/fake-port.js";
 import { createAppService } from "../workflow/service.js";
+import { createStructuredLogger, safeErrorClass } from "../observability/logger.js";
 
 const config = loadAppConfig();
 const dataDir = resolve(config.dataDir);
 const artifacts = new LocalArtifactStore(dataDir);
+const logger = await createStructuredLogger(dataDir);
 const service = await createAppService({
   dataDir,
   ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: config.executionMode === "fake" ? createFakeCodexPort(config.fakeScenario) : new CodexCliPort() },
   models: config.models,
   limits: config.limits,
   executionMode: config.executionMode,
+  logger,
+}).catch(async error => {
+  await logger.record({ event: "server_start_failed", source: "main", errorClass: safeErrorClass(error) });
+  await logger.close();
+  throw error;
 });
 const app = createHttpApp(service);
-app.addHook("onClose", async () => service.close());
+app.addHook("onClose", async () => { await service.close(); await logger.close(); });
 const distRoot = resolve(process.cwd(), "dist");
 const mimeTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",

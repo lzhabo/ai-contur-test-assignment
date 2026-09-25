@@ -42,6 +42,7 @@ const candidates: Record<string, AuthorOutput> = {
     cases: [
       { name: "path", args: [{ A: ["B"], B: ["A", "C"], C: ["B"] }, "A", "C"], expected: ["A", "B", "C"] },
       { name: "missing", args: [{ A: [] }, "A", "B"], expected: [] },
+      { name: "same vertex", args: [{ A: [] }, "A", "A"], expected: ["A"] },
     ],
   },
   catify: {
@@ -75,12 +76,22 @@ export function createFakeCodexPort(scenario: FakeScenario): CodexPort {
 
       let output: CodexOutput;
       if (request.role === "author") {
-        const task = request.contextText;
-        output = task.includes("shortestPath") ? candidates.shortestPath : task.includes("catify") ? candidates.catify : candidates.mergeIntervals;
+        const context = JSON.parse(request.contextText) as { taskText: string; createdVersions: number };
+        const candidate = context.taskText.includes("shortestPath") ? candidates.shortestPath : context.taskText.includes("catify") ? candidates.catify : candidates.mergeIntervals;
+        output = structuredClone(candidate);
+        // Explicit demo fault: version one fails a boundary case, version two
+        // repairs the code. The real adapter never injects errors or fake reviews.
+        if (scenario === "review_once" && context.createdVersions === 0) {
+          if (candidate.functionName === "catify") output.solutionTs = output.solutionTs.replace("\\p{L}+", "[A-Za-z]+");
+          else if (candidate.functionName === "shortestPath") output.solutionTs = output.solutionTs.replace("return path;", "return path.length === 1 ? [] : path;");
+          else output.solutionTs = output.solutionTs.replace("start <= last[1]", "start < last[1]");
+        }
       } else if (request.role === "reviewer") {
         const version = /"createdVersions":(\d+)/.exec(request.contextText)?.[1];
         const reject = scenario === "review_loop" || (scenario === "review_once" && version === "1");
-        output = { kind: "review", verdict: reject ? "changes_requested" : "approved", findings: reject ? ["Добавьте граничный случай и повторите проверку."] : [] };
+        const context = JSON.parse(request.contextText) as { taskText: string };
+        const finding = scenario === "review_loop" ? "Демонстрация лимита: ревьюер намеренно снова требует доработку." : context.taskText.includes("catify") ? "Для входа «Привет, world!» ожидается «мяу, мяу!»: кириллица не заменяется. Используйте Unicode-буквы." : context.taskText.includes("shortestPath") ? "При start=end=A и graph={A:[]} ожидается [A], а не []. Исправьте путь из одной вершины." : "Для [[1,2],[2,4]] ожидается [[1,4]]. Соприкасающиеся интервалы должны объединяться: учитывайте равенство границ.";
+        output = { kind: "review", verdict: reject ? "changes_requested" : "approved", findings: reject ? [finding] : [] };
       } else {
         const parsed = JSON.parse(request.contextText) as { currentArtifact: { versionId: string; manifestHash: string } };
         output = { kind: "apply_request", versionId: parsed.currentArtifact.versionId, manifestHash: parsed.currentArtifact.manifestHash };

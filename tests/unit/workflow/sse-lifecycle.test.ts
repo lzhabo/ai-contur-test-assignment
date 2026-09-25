@@ -7,8 +7,8 @@ import { afterEach, expect, it } from "vitest";
 import { LocalArtifactStore } from "../../../src/server/artifacts/local-store.js";
 import { QuickJsCheckRunner } from "../../../src/server/checks/quickjs-runner.js";
 import { createHttpApp } from "../../../src/server/http/app.js";
-import { acquireDataLock } from "../../../src/server/workflow/data-lock.js";
-import { createFakeCodexPort } from "../../../src/server/workflow/fake-codex.js";
+import { acquireDataLock } from "../../../src/server/storage/data-lock.js";
+import { createFakeCodexPort } from "../../../src/server/codex/fake-port.js";
 import { createAppService, type AppService } from "../../../src/server/workflow/service.js";
 
 const roots: string[] = [];

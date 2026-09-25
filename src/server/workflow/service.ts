@@ -7,7 +7,8 @@ import { DEFAULT_LIMITS, DEFAULT_MODELS, ModelAssignmentsSchema, type ModelAssig
 import { ApprovalSchema, RuntimeLimitsSchema, TaskStateSchema, type Approval, type RuntimeLimits, type TaskState } from "../../shared/contracts.js";
 import type { TaskRuntimePorts } from "../../shared/ports.js";
 import { EventJournal } from "../events/journal.js";
-import { acquireDataLock, type DataLock } from "./data-lock.js";
+import { acquireDataLock, type DataLock } from "../storage/data-lock.js";
+import { bestEffortLogger, noOpLogger, safeErrorClass, stateSummary, type ObservabilityLogger } from "../observability/logger.js";
 import { createTaskGraph } from "./graph.js";
 
 type NonEventPorts = Omit<TaskRuntimePorts, "events">;
@@ -27,6 +28,7 @@ export interface AppServiceOptions {
   models?: ModelAssignments;
   limits?: RuntimeLimits;
   executionMode?: "real" | "fake";
+  logger?: ObservabilityLogger;
 }
 
 export interface AppService {
@@ -47,13 +49,14 @@ export async function createAppService(options: AppServiceOptions): Promise<AppS
   const dataDir = resolve(options.dataDir);
   const lock = await acquireDataLock(dataDir);
   try { return await initializeService(dataDir, lock, options); }
-  catch (error) { await lock.release(); throw error; }
+  catch (error) { await bestEffortLogger(options.logger ?? noOpLogger).record({ event: "service_start_failed", source: "service", errorClass: safeErrorClass(error) }); await lock.release(); throw error; }
 }
 
 async function initializeService(dataDir: string, lock: DataLock, options: AppServiceOptions): Promise<AppService> {
   const models = ModelAssignmentsSchema.parse(options.models ?? DEFAULT_MODELS);
   const limits = RuntimeLimitsSchema.parse(options.limits ?? DEFAULT_LIMITS);
   const executionMode = options.executionMode ?? "real";
+  const logger = bestEffortLogger(options.logger ?? noOpLogger);
   const events = new EventJournal(dataDir);
   const ports: TaskRuntimePorts = { ...options.ports, events };
   const activeRuns = new Map<string, Promise<void>>();
@@ -74,6 +77,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     clearAbort: (taskId, controller) => { if (controllers.get(taskId) === controller) controllers.delete(taskId); },
     isStopRequested: taskId => stopRequested.has(taskId),
     setPublishing: (taskId, active) => { if (active) publishing.add(taskId); else publishing.delete(taskId); },
+    logger,
   });
   const config = (taskId: string) => ({ configurable: { thread_id: taskId }, durability: "sync" as const });
   const indexPath = join(dataDir, "tasks-index.json");
@@ -81,6 +85,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
   try { index = JSON.parse(await readFile(indexPath, "utf8")) as Index; }
   catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") index = { tasks: [] }; else throw error; }
   if (!Array.isArray(index.tasks)) throw new Error("Invalid task index");
+  await logger.record({ event: "service_started", source: "service", executionMode, taskCount: index.tasks.length });
 
   async function saveIndex(): Promise<void> {
     const temp = `${indexPath}.${randomUUID()}.tmp`;
@@ -118,6 +123,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
   function startRun(taskId: string, input: unknown = null): void {
     if (activeRuns.has(taskId)) return;
     const run = Promise.resolve().then(() => graph.invoke(input as never, config(taskId))).then(() => undefined).catch(async error => {
+      await logger.record({ event: "run_failed", source: "service", taskId, errorClass: safeErrorClass(error) });
       const message = error instanceof Error ? error.message : String(error);
       await events.append({ taskId, eventId: `${taskId}:graph-error:${randomUUID()}`, at: now(), type: "task_failed", from: "system", to: null, attemptId: null, text: message, artifactVersionId: null, source: "langgraph" });
     }).finally(() => { activeRuns.delete(taskId); });
@@ -192,6 +198,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     index.tasks.push({ taskId, title: parsed.text.slice(0, 80), createdAt, idempotencyKey: idempotencyKey ?? null, text: parsed.text });
     await saveIndex();
     await events.append({ taskId, eventId: `${taskId}:created`, at: createdAt, type: "task_created", from: "user", to: "author", attemptId: null, text: "Задача создана.", artifactVersionId: null, source: "user" });
+    await logger.record({ event: "task_created", source: "service", taskId, executionMode, after: stateSummary(initial) });
     startRun(taskId);
     return { taskId };
   }
@@ -209,6 +216,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     if (pending) throw new ServiceError(409, "decision_pending", "Решение уже обрабатывается.");
     await ports.artifacts.verifyVersion(state.currentArtifact);
     const approval = ApprovalSchema.parse({ ...parsed, at: now() });
+    await logger.record({ event: "decision_received", source: "service", taskId, attemptId: state.lastAttempt?.attemptId ?? null, versionId: approval.versionId, manifestHash: approval.manifestHash, decisionId: approval.decisionId, decision: approval.decision });
     pendingDecisions.set(taskId, approval);
     await emitDecision(taskId, approval);
     const run = graph.invoke(new Command({ resume: approval }), config(taskId)).then(() => undefined).finally(() => { pendingDecisions.delete(taskId); activeRuns.delete(taskId); });
@@ -222,6 +230,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     const { state, next } = await stateOf(taskId);
     if (terminal.has(state.phase)) return snapshot(taskId);
     stopRequested.add(taskId);
+    await logger.record({ event: "stop_requested", source: "service", taskId, attemptId: state.activeAttempt?.attemptId ?? null });
     controllers.get(taskId)?.abort();
     const run = activeRuns.get(taskId);
     if (run) {
@@ -245,6 +254,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     if (state.phase !== "unknown_outcome" || parsed.mode !== "retry_unknown") throw new ServiceError(409, "resume_not_allowed", "Нужен явный повтор неизвестного вызова.");
     if (activeRuns.has(taskId)) throw new ServiceError(409, "task_running", "Задача ещё выполняется.");
     startRun(taskId, new Command({ resume: { retry: true } }));
+    await logger.record({ event: "resume_requested", source: "service", taskId, attemptId: state.lastAttempt?.attemptId ?? null });
     return snapshot(taskId);
   }
   const resume = (taskId: string, input: ResumeRequest) => serializeMutation(() => resumeInternal(taskId, input));
@@ -273,6 +283,8 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     for (const controller of controllers.values()) controller.abort();
     await Promise.allSettled([...activeRuns.values()]);
     await lock.release();
+    await logger.record({ event: "service_stopped", source: "service", executionMode });
+    await logger.flush();
   }
 
   // Persist an explicit unknown state before serving recovered tasks. `updateState`
@@ -280,9 +292,13 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
   for (const entry of index.tasks) {
     const { state, next } = await stateOf(entry.taskId);
     const pendingNode = next[0];
+    await logger.record({ event: "task_recovered", source: "service", taskId: entry.taskId, attemptId: state.activeAttempt?.attemptId ?? state.lastAttempt?.attemptId ?? null, node: pendingNode ?? null, after: stateSummary(state), executionMode });
     // A different adapter mode may inspect history, but must never continue a
     // pending real task with fake output (or the reverse).
-    if (state.executionMode !== executionMode) continue;
+    if (state.executionMode !== executionMode) {
+      await logger.record({ event: "recovery_mode_mismatch", source: "service", taskId: entry.taskId, node: pendingNode ?? null, executionMode });
+      continue;
+    }
     if (pendingNode === "callApplier" && state.activeAttempt && state.currentArtifact && state.approval?.decision === "approve") {
       const resultPath = join(dataDir, "tasks", entry.taskId, "result");
       let resultExists = false;
@@ -295,12 +311,14 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
           const completedAttempt = { ...state.activeAttempt, status: "completed" as const, endedAt: now() };
           const completed: TaskState = { ...state, phase: "completed", resultPath, activeAttempt: null, lastAttempt: completedAttempt, updatedAt: now() };
           await graph.updateState(config(entry.taskId), { value: completed }, "callApplier");
+          await logger.record({ event: "recovery_publication_completed", source: "service", taskId: entry.taskId, attemptId: completedAttempt.attemptId, node: "callApplier", before: stateSummary(state), after: stateSummary(completed) });
           await events.append({ taskId: entry.taskId, eventId: `${entry.taskId}:${completedAttempt.attemptId}:published`, at: now(), type: "publication_finished", from: "applier", to: "user", attemptId: completedAttempt.attemptId, text: "Одобренная версия восстановлена по опубликованным файлам.", artifactVersionId: state.currentArtifact.versionId, source: "recovery" });
         } catch (error) {
           const reason = error instanceof Error ? error.message : String(error);
           const failedAttempt = { ...state.activeAttempt, status: "failed" as const, endedAt: now(), error: reason };
           const broken: TaskState = { ...state, phase: "error", stopReason: `Опубликованный результат повреждён после сбоя: ${reason}`, activeAttempt: null, lastAttempt: failedAttempt, updatedAt: now() };
           await graph.updateState(config(entry.taskId), { value: broken }, "callApplier");
+          await logger.record({ event: "recovery_publication_failed", source: "service", taskId: entry.taskId, attemptId: failedAttempt.attemptId, node: "callApplier", before: stateSummary(state), after: stateSummary(broken), errorClass: safeErrorClass(error) });
           await events.append({ taskId: entry.taskId, eventId: `${entry.taskId}:${failedAttempt.attemptId}:published-corrupt`, at: now(), type: "task_failed", from: "system", to: "user", attemptId: failedAttempt.attemptId, text: broken.stopReason!, artifactVersionId: state.currentArtifact.versionId, source: "recovery" });
         }
         continue;
@@ -310,6 +328,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
       const lastAttempt = { ...state.activeAttempt, status: "unknown" as const, endedAt: now(), error: "Backend stopped before the external call outcome was checkpointed." };
       const unknown: TaskState = { ...state, phase: "unknown_outcome", stopReason: "Исход внешнего вызова после перезапуска неизвестен.", activeAttempt: null, lastAttempt, updatedAt: now() };
       await graph.updateState(config(entry.taskId), { value: unknown }, pendingNode);
+      await logger.record({ event: "recovery_unknown_outcome", source: "service", taskId: entry.taskId, attemptId: lastAttempt.attemptId, node: pendingNode, before: stateSummary(state), after: stateSummary(unknown) });
       await events.append({ taskId: entry.taskId, eventId: `${entry.taskId}:${lastAttempt.attemptId}:recovered-unknown`, at: now(), type: "unknown_outcome", from: "system", to: "user", attemptId: lastAttempt.attemptId, text: unknown.stopReason!, artifactVersionId: state.currentArtifact?.versionId ?? null, source: "checkpoint" });
       await graph.invoke(null, config(entry.taskId));
     } else if (pendingNode && pendingNode !== "waitApproval" && pendingNode !== "pauseUnknown" && !terminal.has(state.phase)) {

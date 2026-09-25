@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
-import { Annotation, END, interrupt, START, StateGraph } from "@langchain/langgraph";
-import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
+import { Annotation, END, interrupt, isGraphInterrupt, START, StateGraph } from "@langchain/langgraph";
 import { ZodError } from "zod";
 import { ApprovalSchema, AuthorOutputSchema, ReviewerOutputSchema, ApplierOutputSchema, type Attempt, type TaskState } from "../../shared/contracts.js";
 import type { AgentRole } from "../../shared/api.js";
 import type { CodexOutput, ProcessObservation } from "../../shared/contracts.js";
 import type { TaskRuntimePorts, TaskEventInput } from "../../shared/ports.js";
+import { observedSqliteSaver } from "../observability/checkpointer.js";
+import { changedFields, noOpLogger, safeErrorClass, stateSummary, type ObservabilityLogger } from "../observability/logger.js";
 
 export interface WorkflowHooks {
   ports: TaskRuntimePorts;
@@ -13,6 +14,7 @@ export interface WorkflowHooks {
   clearAbort(taskId: string, controller: AbortController): void;
   isStopRequested(taskId: string): boolean;
   setPublishing?(taskId: string, publishing: boolean): void;
+  logger?: ObservabilityLogger;
 }
 
 const GraphState = Annotation.Root({ value: Annotation<TaskState> });
@@ -26,6 +28,24 @@ const ROLE_INSTRUCTIONS: Record<AgentRole, string> = {
 
 export function createTaskGraph(checkpointPath: string, hooks: WorkflowHooks) {
   const { ports } = hooks;
+  const logger = hooks.logger ?? noOpLogger;
+  const lastCompletedNode = new Map<string, string>();
+  function observedNode<T extends (state: { value: TaskState }) => unknown>(node: string, run: T): T {
+    return (async (state: { value: TaskState }) => {
+      const before = stateSummary(state.value);
+      try {
+        const result = await run(state);
+        lastCompletedNode.set(state.value.taskId, node);
+        const next = (result as { value?: TaskState })?.value;
+        const after = stateSummary(next);
+        try { await logger.record({ event: "node_completed", source: "LangGraph.node", taskId: state.value.taskId, attemptId: next?.activeAttempt?.attemptId ?? next?.lastAttempt?.attemptId ?? null, node, before, after, changed: changedFields(before, after) }); } catch { /* logging cannot affect node */ }
+        return result;
+      } catch (error) {
+        try { await logger.record({ event: isGraphInterrupt(error) ? "node_paused" : "node_failed", source: "LangGraph.node", taskId: state.value.taskId, attemptId: state.value.activeAttempt?.attemptId ?? null, node, before, errorClass: safeErrorClass(error) }); } catch { /* logging cannot affect node */ }
+        throw error;
+      }
+    }) as T;
+  }
 
   async function emit(state: TaskState, type: TaskEventInput["type"], text: string, key: string, extra: Partial<TaskEventInput> = {}) {
     await ports.events.append({ taskId: state.taskId, eventId: `${state.taskId}:${key}`, at: now(), type, from: "system", to: null, attemptId: null, text, artifactVersionId: state.currentArtifact?.versionId ?? null, source: null, ...extra });
@@ -93,8 +113,8 @@ export function createTaskGraph(checkpointPath: string, hooks: WorkflowHooks) {
   }
 
   const graph = new StateGraph(GraphState)
-    .addNode("prepareAuthor", (state) => ({ value: reserve(state.value, "author") }))
-    .addNode("callAuthor", async (state) => {
+    .addNode("prepareAuthor", observedNode("prepareAuthor", (state) => ({ value: reserve(state.value, "author") })))
+    .addNode("callAuthor", observedNode("callAuthor", async (state) => {
       const current = state.value;
       try {
         const { output, observations } = await invokeRole(current, "author");
@@ -105,8 +125,8 @@ export function createTaskGraph(checkpointPath: string, hooks: WorkflowHooks) {
         await emit(next, "version_created", `Автор создал версию ${artifact.versionId}.`, `${completed.attemptId}:version`, { from: "author", to: "reviewer", attemptId: completed.attemptId });
         return { value: next };
       } catch (error) { return { value: await failed(current, error) }; }
-    })
-    .addNode("check", async (state) => {
+    }))
+    .addNode("check", observedNode("check", async (state) => {
       const current = state.value;
       if (!current.currentArtifact) throw new Error("No candidate for checks");
       const controller = new AbortController();
@@ -124,9 +144,9 @@ export function createTaskGraph(checkpointPath: string, hooks: WorkflowHooks) {
         return { value: next };
       }
       finally { hooks.clearAbort(current.taskId, controller); }
-    })
-    .addNode("prepareReviewer", (state) => ({ value: reserve(state.value, "reviewer") }))
-    .addNode("callReviewer", async (state) => {
+    }))
+    .addNode("prepareReviewer", observedNode("prepareReviewer", (state) => ({ value: reserve(state.value, "reviewer") })))
+    .addNode("callReviewer", observedNode("callReviewer", async (state) => {
       const current = state.value;
       try {
         const { output, observations } = await invokeRole(current, "reviewer");
@@ -141,8 +161,8 @@ export function createTaskGraph(checkpointPath: string, hooks: WorkflowHooks) {
         await emit(next, "review_finished", verdict === "approved" ? "Ревьюер одобрил версию." : `Ревьюер запросил изменения: ${findings.join("; ")}`, `${completed.attemptId}:review`, { from: "reviewer", to: verdict === "approved" ? "user" : "author", attemptId: completed.attemptId });
         return { value: next };
       } catch (error) { return { value: await failed(current, error) }; }
-    })
-    .addNode("waitApproval", (state) => {
+    }))
+    .addNode("waitApproval", observedNode("waitApproval", (state) => {
       const current = state.value;
       const artifact = current.currentArtifact;
       if (!artifact) throw new Error("Missing reviewed artifact");
@@ -150,14 +170,14 @@ export function createTaskGraph(checkpointPath: string, hooks: WorkflowHooks) {
       const approval = ApprovalSchema.parse(raw);
       const next: TaskState = { ...current, approval, phase: approval.decision === "approve" ? "applying" : "stopped", stopReason: approval.decision === "reject" ? "Пользователь отклонил версию." : null, updatedAt: now() };
       return { value: next };
-    })
-    .addNode("pauseUnknown", (state) => {
+    }))
+    .addNode("pauseUnknown", observedNode("pauseUnknown", (state) => {
       const current = state.value;
       interrupt({ action: "explicit_retry_required", attemptId: current.lastAttempt?.attemptId ?? null });
       return { value: { ...current, phase: "preparing" as const, stopReason: null, updatedAt: now() } };
-    })
-    .addNode("prepareApplier", (state) => ({ value: reserve(state.value, "applier") }))
-    .addNode("callApplier", async (state) => {
+    }))
+    .addNode("prepareApplier", observedNode("prepareApplier", (state) => ({ value: reserve(state.value, "applier") })))
+    .addNode("callApplier", observedNode("callApplier", async (state) => {
       const current = state.value;
       try {
         const { output, observations } = await invokeRole(current, "applier");
@@ -179,7 +199,7 @@ export function createTaskGraph(checkpointPath: string, hooks: WorkflowHooks) {
         await emit(next, "publication_finished", "Одобренная версия опубликована.", `${completed.attemptId}:published`, { from: "applier", to: "user", attemptId: completed.attemptId });
         return { value: next };
       } catch (error) { return { value: await failed(current, error) }; }
-    })
+    }))
     .addEdge(START, "prepareAuthor")
     .addConditionalEdges("prepareAuthor", state => state.value.phase === "stopped" ? END : "callAuthor")
     .addConditionalEdges("callAuthor", state => state.value.phase === "checking" ? "check" : state.value.phase === "unknown_outcome" ? "pauseUnknown" : END)
@@ -191,5 +211,5 @@ export function createTaskGraph(checkpointPath: string, hooks: WorkflowHooks) {
     .addConditionalEdges("prepareApplier", state => state.value.phase === "stopped" ? END : "callApplier")
     .addConditionalEdges("callApplier", state => state.value.phase === "unknown_outcome" ? "pauseUnknown" : END);
 
-  return graph.compile({ checkpointer: SqliteSaver.fromConnString(checkpointPath) });
+  return graph.compile({ checkpointer: observedSqliteSaver(checkpointPath, logger, taskId => lastCompletedNode.get(taskId) ?? null) });
 }

@@ -1,7 +1,7 @@
 import { appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createAppService } from '../../../src/server/workflow/service.js';
-import { createFakeCodexPort } from '../../../src/server/workflow/fake-codex.js';
+import { createFakeCodexPort } from '../../../src/server/codex/fake-port.js';
 import { LocalArtifactStore } from '../../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../../src/server/checks/quickjs-runner.js';
 const root = process.argv[2]!;

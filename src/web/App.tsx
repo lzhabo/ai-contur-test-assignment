@@ -1,20 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { TaskListResponseSchema, TaskSnapshotResponseSchema, type TaskEvent, type TaskPhase, type TaskSnapshotResponse, type TaskSummary } from '../shared/api';
+import { TaskListResponseSchema, TaskSnapshotResponseSchema, type TaskPhase, type TaskSnapshotResponse, type TaskSummary } from '../shared/api';
 import { TASK_EXAMPLES } from '../shared/examples';
+import { ADVANCED_EXAMPLE } from '../shared/advanced-example';
+import { WorkflowGraph } from './workflow/WorkflowGraph';
 
 const PHASES: Record<TaskPhase, string> = { preparing: 'Подготовка', author: 'Автор пишет функцию', checking: 'Проверка функции', review: 'Ревью кода', awaiting_approval: 'Нужно ваше решение', applying: 'Сохранение результата', completed: 'Готово', stopped: 'Остановлено', error: 'Ошибка', unknown_outcome: 'Исход вызова неизвестен' };
 const ROLES: Record<string, string> = { author: 'Автор', reviewer: 'Ревьюер', applier: 'Применяющий агент', system: 'Приложение', user: 'Вы' };
 const EXAMPLE_DESCRIPTIONS = ['Пересечения, касания и вложенные интервалы. Проверим граничные случаи.', 'Путь между двумя вершинами графа. Поиск в ширину и проверка циклов.', 'Каждое слово превращается в «мяу». Пробелы, цифры и пунктуация остаются.'];
-function roleStatus(role: string, phase: TaskPhase, active: boolean): string {
-  if (active) return '● Выполняет задачу';
-  if (phase === 'completed') return 'Работа завершена';
-  if (phase === 'stopped') return 'Работа остановлена';
-  if (phase === 'error' || phase === 'unknown_outcome') return 'Требуется внимание';
-  if (role === 'applier' && phase === 'awaiting_approval') return 'Ждёт вашего решения';
-  if (role === 'author' && ['checking', 'review', 'awaiting_approval', 'applying'].includes(phase)) return 'Версия передана дальше';
-  if (role === 'reviewer' && ['awaiting_approval', 'applying'].includes(phase)) return 'Версия одобрена';
-  return 'Ожидает своего этапа';
-}
 const time = (date: string) => new Date(date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const fromHash = () => { try { return decodeURIComponent(location.hash.slice(1)) || null; } catch { return null; } };
 const navigate = (id: string | null) => { location.hash = id ? encodeURIComponent(id) : ''; };
@@ -135,6 +127,7 @@ export function App() {
           </form>
           <div className="examples-title"><h3>Начните с примера</h3><small className="muted">Можно отредактировать</small></div>
           <div className="examples">{TASK_EXAMPLES.map((example, index) => <button key={example.id} className="example" onClick={() => { setText(example.text); document.getElementById('task-text')?.focus(); }}><small>0{index + 1} / ПРИМЕР</small><strong>{example.title} ↗</strong><p>{EXAMPLE_DESCRIPTIONS[index]}</p></button>)}</div>
+          <button className="advanced-example" onClick={() => { setText(ADVANCED_EXAMPLE.text); document.getElementById('task-text')?.focus(); }}><strong>Сложный пример: расчёт корзины ↗</strong><span>{ADVANCED_EXAMPLE.description}</span><small>Заполнить поле задачи · запуск отдельной кнопкой</small></button>
           <div className="flow-preview"><span><b>01 · Автор</b>Функция и тестовые случаи</span><span><b>02 · Ревьюер</b>Проверка и доработка</span><span><b>03 · Применение</b>После вашего решения</span></div>
           <p className="scope-note">Одна чистая синхронная функция с JSON-входом и результатом. Без сети, файлов и сторонних зависимостей. Для каждой задачи создаётся отдельная папка результата.</p>
         </> : !snapshot ? <div className="empty" role="status">Загружаем сохранённую задачу…</div> : <>
@@ -144,9 +137,8 @@ export function App() {
           {snapshot.task.stopReason && <div className={`notice ${snapshot.task.phase === 'completed' ? '' : 'warning'}`}><strong>{PHASES[snapshot.task.phase]}.</strong> {snapshot.task.stopReason}</div>}
           {pending && <div className={`notice ${age >= 30 ? 'warning' : ''}`} role="status"><strong>{ROLES[pending.role]}: ожидаем результат {age} с.</strong>{age >= 30 && <p>Ответ пока не получен. Можно продолжать ждать или остановить задачу.</p>}<br />Последнее наблюдение: {pending.lastObservedStage || 'Попытка сохранена; подтверждения запуска ещё нет'}.{pending.lastObservedAt && ` ${time(pending.lastObservedAt)}`}<br /><small>Запуск локального процесса сам по себе не подтверждает доставку облачной модели.</small></div>}
           {snapshot.actions.canResume && <div className="notice warning"><strong>Продолжить сохранённую задачу</strong><p>{snapshot.actions.resumeRequiresExplicitRetry ? 'Исход предыдущего вызова неизвестен. Повтор создаст новый вызов модели и потратит ещё одну попытку.' : 'Продолжение начнётся с сохранённого этапа.'}</p><div className="notice-actions"><button onClick={() => void resume()} disabled={busy}>{snapshot.actions.resumeRequiresExplicitRetry ? 'Повторить неизвестный вызов' : 'Продолжить'}</button></div></div>}
-          <div className="roles">{(['author', 'reviewer', 'applier'] as const).map((role, index) => { const active = pending?.role === role; return <article className={`role ${active ? 'active' : ''}`} key={role}><div className="role-head"><span className="role-num">0{index + 1}</span><div><h3>{ROLES[role]}</h3><div className="role-model mono">{snapshot.state.models[role]}</div></div></div><div className="role-status">{roleStatus(role, snapshot.task.phase, active)}</div></article>; })}</div>
-          <div className="task-columns">
-            <section className="panel"><div className="panel-head"><h2>Ход работы</h2><small>{snapshot.state.usedModelCalls} / {snapshot.state.maxModelCalls} вызовов</small></div><Timeline events={snapshot.events} /></section>
+          <WorkflowGraph key={snapshot.task.taskId} snapshot={snapshot} />
+          <div className="task-proposal">
             <section className="panel"><div className="panel-head"><h2>{snapshot.task.phase === 'completed' ? 'Результат' : 'Предложение'}</h2><small>Версия {snapshot.state.createdVersions} / {snapshot.state.maxVersions}</small></div><Files snapshot={snapshot} />
               {snapshot.state.latestChecks && <div className="approval"><h3>Проверки: {snapshot.state.latestChecks.status === 'passed' ? 'пройдены' : 'есть ошибки'}</h3><div className="checks"><p>TypeScript: {snapshot.state.latestChecks.compilationStatus === 'passed' ? 'без ошибок' : snapshot.state.latestChecks.compilationStatus}</p><p>Тесты: {snapshot.state.latestChecks.passedCases} пройдено · {snapshot.state.latestChecks.failedCases} не пройдено</p>{snapshot.state.latestChecks.diagnostics.map((message, index) => <p key={index}>{message}</p>)}</div></div>}
               {snapshot.state.latestReview && <div className="approval"><h3>{snapshot.state.latestReview.verdict === 'approved' ? 'Ревьюер одобрил версию' : 'Замечания ревьюера'}</h3>{snapshot.state.latestReview.findings.map((finding, index) => <p className="review-summary" key={index}>{finding}</p>)}</div>}
@@ -160,7 +152,6 @@ export function App() {
     </main>
   </div>;
 }
-function EventRow({ event }: { event: TaskEvent }) { return <article className="event"><div className="event-meta"><span>{ROLES[event.from || 'system'] || event.from}{event.to ? ` → ${ROLES[event.to] || event.to}` : ''}</span><time dateTime={event.at}>{time(event.at)}</time></div><p>{event.text}</p>{event.source && <small className="muted">Источник: {event.source}</small>}</article>; }
 function Files({ snapshot }: { snapshot: TaskSnapshotResponse }) {
   const files = snapshot.files.filter(file => file.versionId === snapshot.state.currentVersionId);
   const [selected, setSelected] = useState<string | null>(null);
@@ -183,12 +174,4 @@ function Result({ path, taskId }: { path: string; taskId: string }) {
   const [error, setError] = useState('');
   const copy = async () => { try { await navigator.clipboard.writeText(path); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setError('Не удалось скопировать автоматически. Выделите путь и скопируйте его.'); } };
   return <div className="approval"><h3>Файлы сохранены</h3><code className="result-path">{path}</code><div className="notice-actions"><button onClick={() => void copy()}>{copied ? 'Путь скопирован' : 'Скопировать путь'}</button><a href={`/api/tasks/${encodeURIComponent(taskId)}/result.zip`} download>Скачать комплект ZIP ↓</a></div>{error && <p role="alert">{error}</p>}</div>;
-}
-
-function Timeline({ events }: { events: TaskEvent[] }) {
-  const container = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
-  const ordered = [...new Map(events.map(event => [event.eventId, event])).values()].sort((a, b) => a.sequence - b.sequence);
-  useEffect(() => { if (container.current && follow.current) container.current.scrollTop = container.current.scrollHeight; }, [events.length]);
-  return <div ref={container} className="timeline" aria-label="Сообщения агентов" onScroll={() => { const element = container.current; if (element) follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 70; }}>{ordered.length ? ordered.map(event => <EventRow key={event.eventId} event={event} />) : <p className="empty">Задача принята. Ожидаем первые события.</p>}</div>;
 }
