@@ -70,3 +70,4 @@ APP_CODEX_MODE=fake APP_FAKE_SCENARIO=review_once APP_DATA_DIR=.local-data/demo-
 - [Настоящие переписки](tasks/two-model-loop/delivery/conversations/README.md), [сценарий демонстрации](tasks/two-model-loop/delivery/demo.md).
 
 Правила совместной разработки находятся в `AGENTS.md` и `workflow/PROCESS.md`. Это инструкции команде разработчиков, а не реализация графа агентов продукта.
+# ai-contur-test-assignment
