@@ -133,7 +133,7 @@ try {
   assert.notEqual(versions[0], versions[1]);
   assert.deepEqual(reviews.map(event => event.artifactVersionId), versions);
   assert.deepEqual(checkEvents.map(event => event.artifactVersionId), versions);
-  assert.ok(checkEvents.every(event => event.text.includes('passed')),
+  assert.ok(checkEvents.every(event => event.text === 'Проверки: passed, тесты: passed.'),
     'Self-tests must pass so the first real review is not a forced rejection by failed checks');
   assert.equal(snapshot.state.latestReview?.versionId, versions[1]);
   assert.equal(snapshot.state.latestChecks?.testsStatus, 'passed');
