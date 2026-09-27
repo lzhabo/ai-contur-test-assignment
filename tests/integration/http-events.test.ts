@@ -87,7 +87,13 @@ it('HTTP parser preserves JSON errors, content type, size limit and HEAD respons
   const malformed = await fetch(`${base}/api/tasks`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{' });
   expect(malformed.status).toBe(500);
   expect((await malformed.json() as { code: string }).code).toBe('internal_error');
-  const unsupported = await fetch(`${base}/api/tasks`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'mergeIntervals' });
+  const scalar = await fetch(`${base}/api/tasks`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '1' });
+  expect(scalar.status).toBe(400);
+  expect((await scalar.json() as { code: string }).code).toBe('invalid_request');
+  const plain = await fetch(`${base}/api/tasks`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'mergeIntervals' });
+  expect(plain.status).toBe(400);
+  expect((await plain.json() as { code: string }).code).toBe('invalid_request');
+  const unsupported = await fetch(`${base}/api/tasks`, { method: 'POST', headers: { 'content-type': 'application/problem+json' }, body: '{"text":"mergeIntervals"}' });
   expect(unsupported.status).toBe(500);
   expect((await unsupported.json() as { code: string }).code).toBe('internal_error');
   const oversized = await post(base, '/api/tasks', { text: 'x'.repeat(1_100_000) });

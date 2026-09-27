@@ -22,8 +22,8 @@ const service = await createAppService({
   executionMode: config.executionMode,
   logger,
 }).catch(async error => {
-  await logger.record({ event: "server_start_failed", source: "main", errorClass: safeErrorClass(error) });
-  await logger.close();
+  try { await logger.record({ event: "server_start_failed", source: "main", errorClass: safeErrorClass(error) }); }
+  finally { await logger.close(); }
   throw error;
 });
 const app = createHttpApp(service);
@@ -55,8 +55,8 @@ try {
     server.listen(config.port, config.host, () => { server.off("error", reject); resolve(); });
   });
 } catch (error) {
-  await logger.record({ event: "server_start_failed", source: "main", errorClass: safeErrorClass(error) });
-  await close();
+  try { await logger.record({ event: "server_start_failed", source: "main", errorClass: safeErrorClass(error) }); }
+  finally { await close(); }
   throw error;
 }
 await logger.record({ event: "server_started", source: "main", host: config.host, port: config.port, executionMode: config.executionMode }).catch(() => undefined);

@@ -14,9 +14,9 @@ test('A-09/A-10: edited example, visible roles, reload approval and exact downlo
   expect(new URL(page.url()).hash).toBe('');
   await input.fill((await input.inputValue()) + '\nQA: обязательно проверь касание интервалов.');
   await page.getByRole('button', { name: 'Запустить агентов' }).click();
-  await expect(page.getByRole('heading', { name: 'Автор', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Ревьюер', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Применяющий агент', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Автор gpt-6-sol/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Ревьюер gpt-6-luna/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Применяющий gpt-6-sol/ })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Подтвердить', exact: true })).toBeVisible();
   const taskUrl = page.url();
   const before = await page.getByLabel('Содержимое solution.ts').innerText();

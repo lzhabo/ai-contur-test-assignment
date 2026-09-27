@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { extname, relative, resolve, sep } from "node:path";
 import type { Express } from "express";
 
@@ -20,17 +20,32 @@ export function installFrontendFallback(app: Express, distRoot: string): void {
     }
     const requested = new URL(request.originalUrl, "http://localhost").pathname;
     const candidate = resolve(distRoot, `.${requested}`);
-    const pathFromRoot = relative(distRoot, candidate);
-    if (pathFromRoot === ".." || pathFromRoot.startsWith(`..${sep}`)) {
+    const withinRoot = (file: string, root: string) => {
+      const pathFromRoot = relative(root, file);
+      return pathFromRoot !== ".." && !pathFromRoot.startsWith(`..${sep}`);
+    };
+    if (!withinRoot(candidate, distRoot)) {
       response.status(404).send("Not found");
       return;
     }
     try {
-      const file = await readFile(candidate);
+      const actualRoot = await realpath(distRoot);
+      const actualCandidate = await realpath(candidate);
+      if (!withinRoot(actualCandidate, actualRoot)) {
+        response.status(404).send("Not found");
+        return;
+      }
+      const file = await readFile(actualCandidate);
       response.type(mimeTypes[extname(candidate)] ?? "application/octet-stream").send(file);
     } catch {
       try {
-        const html = await readFile(resolve(distRoot, "index.html"));
+        const actualRoot = await realpath(distRoot);
+        const actualIndex = await realpath(resolve(distRoot, "index.html"));
+        if (!withinRoot(actualIndex, actualRoot)) {
+          response.status(404).send("Not found");
+          return;
+        }
+        const html = await readFile(actualIndex);
         response.type(mimeTypes[".html"]).send(html);
       } catch {
         response.status(503).send("Frontend build is unavailable; run npm run build");

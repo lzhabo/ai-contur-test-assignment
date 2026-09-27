@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
@@ -49,4 +49,29 @@ it("returns 503 when the frontend build is missing", async () => {
   const response = await fetch(base);
   expect(response.status).toBe(503);
   expect(await response.text()).toBe("Frontend build is unavailable; run npm run build");
+});
+
+it("does not follow an asset symlink outside dist", async () => {
+  const root = await mkdtemp(join(tmpdir(), "loop-dist-link-")); roots.push(root);
+  const dist = join(root, "dist");
+  await mkdir(dist);
+  await writeFile(join(dist, "index.html"), "<main>app</main>");
+  await writeFile(join(root, "private.txt"), "secret outside dist");
+  await symlink(join(root, "private.txt"), join(dist, "leak.txt"));
+  const base = await serve(dist);
+  const response = await fetch(`${base}/leak.txt`);
+  expect(response.status).toBe(404);
+  expect(await response.text()).not.toContain("secret outside dist");
+});
+
+it("does not follow a fallback index symlink outside dist", async () => {
+  const root = await mkdtemp(join(tmpdir(), "loop-index-link-")); roots.push(root);
+  const dist = join(root, "dist");
+  await mkdir(dist);
+  await writeFile(join(root, "private.html"), "secret outside dist");
+  await symlink(join(root, "private.html"), join(dist, "index.html"));
+  const base = await serve(dist);
+  const response = await fetch(`${base}/some/spa/route`);
+  expect(response.status).toBe(404);
+  expect(await response.text()).not.toContain("secret outside dist");
 });

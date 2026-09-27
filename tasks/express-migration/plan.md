@@ -9,7 +9,7 @@
 | `GET /api/tasks/:id`; POST decision/stop/resume: прежние DTO, коды и проверки версии/retry | Прямые вызовы типизированного сервиса, общий error middleware | HTTP integration, service tests |
 | Origin у изменяющих методов: только `http://localhost` или `127.0.0.1` с тем же Host | Middleware перед JSON parser и маршрутами | HTTP integration |
 | Ошибки: ServiceError→код/сообщение; Zod→400; внутренние и ошибки parser→500 без утечки | Последний error middleware | HTTP integration |
-| JSON до 1 MiB; malformed JSON и unsupported Content-Type дают `internal_error` 500 в старом custom handler | `express.json` и проверка content type; ошибки идут в middleware | HTTP integration |
+| JSON и text/plain до 1 MiB; текст и JSON-скаляры доходят до Zod (400), malformed JSON и неподдерживаемый Content-Type дают `internal_error` 500 в старом custom handler | `express.json`/`express.text` и проверка content type; ошибки идут в middleware | HTTP integration |
 | HEAD для GET, пустое тело | Автоматический HEAD Express | HTTP integration |
 | SSE: task и cursor до headers, Last-Event-ID выше after, connected, heartbeat 15 с, replay/live без дублей | Stream с subscribe-before-replay и очередью; cleanup при close/error/shutdown | HTTP integration, lifecycle |
 | Artifact plain text, download=1; результат ZIP бинарный | `res.send` для текста/Buffer с прежними headers | HTTP integration, artifact tests |

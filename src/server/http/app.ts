@@ -2,6 +2,7 @@ import express, { type ErrorRequestHandler, type Express, type Request, type Res
 import { ZodError } from "zod";
 import { CreateTaskRequestSchema, DecisionRequestSchema, ResumeRequestSchema } from "../../shared/api.js";
 import { ServiceError, type AppService } from "../workflow/service.js";
+import { safeErrorClass } from "../observability/logger.js";
 
 type TaskParams = { id: string };
 type ArtifactParams = TaskParams & { artifactId: string };
@@ -23,8 +24,8 @@ function cursorOf(request: Request): number {
   return after;
 }
 
-function isJsonRequest(request: Request): boolean {
-  return request.is("application/json") !== false || request.is("application/*+json") !== false;
+function hasSupportedContentType(request: Request): boolean {
+  return request.is("application/json") !== false || request.is("text/plain") !== false;
 }
 
 export function closeHttpStreams(app: Express): void {
@@ -47,10 +48,11 @@ export function createHttpApp(service: AppService): Express {
   app.use((request, _response, next) => {
     if (["POST", "PUT", "PATCH"].includes(request.method) &&
       (request.headers["content-length"] !== undefined || request.headers["transfer-encoding"] !== undefined) &&
-      !isJsonRequest(request)) return next(new Error("Unsupported content type"));
+      !hasSupportedContentType(request)) return next(new Error("Unsupported content type"));
     next();
   });
-  app.use(express.json({ limit: 1024 * 1024, type: ["application/json", "application/*+json"] }));
+  app.use(express.json({ limit: 1024 * 1024, strict: false, type: "application/json" }));
+  app.use(express.text({ limit: 1024 * 1024, type: "text/plain" }));
 
   const api = express.Router();
   api.get("/health", (_request, response) => { response.json({ ok: true, executionMode: service.executionMode }); });
@@ -99,7 +101,7 @@ export function createHttpApp(service: AppService): Express {
       ready = true;
       for (const item of pending) write(item.sequence, item.data);
     } catch (error) {
-      console.error(error);
+      console.error("SSE replay failed:", safeErrorClass(error));
       response.end();
     }
   });
@@ -121,7 +123,7 @@ export function createHttpApp(service: AppService): Express {
     if (response.headersSent) { response.end(); return; }
     if (error instanceof ServiceError) { response.status(error.statusCode).json({ code: error.code, message: error.message }); return; }
     if (error instanceof ZodError) { response.status(400).json({ code: "invalid_request", message: error.issues.map(issue => issue.message).join("; ") }); return; }
-    console.error(error);
+    console.error("HTTP request failed:", safeErrorClass(error));
     response.status(500).json({ code: "internal_error", message: "Внутренняя ошибка приложения." });
   };
   app.use(handleError);
