@@ -27,13 +27,13 @@ export interface AppServiceOptions {
   ports: NonEventPorts;
   models?: ModelAssignments;
   limits?: RuntimeLimits;
-  executionMode?: "real" | "fake";
+  executionMode?: "real" | "mock";
   logger?: ObservabilityLogger;
 }
 
 export interface AppService {
   readonly events: EventJournal;
-  readonly executionMode: "real" | "fake";
+  readonly executionMode: "real" | "mock";
   createTask(input: { text: string }, idempotencyKey?: string): Promise<{ taskId: string }>;
   listTasks(): Promise<TaskListResponse>;
   getTask(taskId: string): Promise<TaskSnapshotResponse>;
@@ -294,7 +294,7 @@ async function initializeService(dataDir: string, lock: DataLock, options: AppSe
     const pendingNode = next[0];
     await logger.record({ event: "task_recovered", source: "service", taskId: entry.taskId, attemptId: state.activeAttempt?.attemptId ?? state.lastAttempt?.attemptId ?? null, node: pendingNode ?? null, after: stateSummary(state), executionMode });
     // A different adapter mode may inspect history, but must never continue a
-    // pending real task with fake output (or the reverse).
+    // pending real task with mock output (or the reverse).
     if (state.executionMode !== executionMode) {
       await logger.record({ event: "recovery_mode_mismatch", source: "service", taskId: entry.taskId, node: pendingNode ?? null, executionMode });
       continue;

@@ -11,20 +11,21 @@ import { TASK_EXAMPLES } from '../../src/shared/examples.js';
 import { AuthorOutputSchema, TestCaseSchema } from '../../src/shared/contracts.js';
 import type { CodexPort, CodexRunResult } from '../../src/shared/ports.js';
 
-// Opt-in live probe. The first author response is a labeled fixture; all later
-// responses come from the real Codex CLI and pass through the production graph.
+// Смешанная проба запускается отдельно: первая версия — замоканная версия с намеренной ошибкой.
+// Все последующие ответы приходят от настоящего Codex CLI и проходят через рабочий граф приложения.
 const weak = JSON.parse(await readFile(new URL('../fixtures/weak-self-tests.json', import.meta.url), 'utf8')) as {
   functionName: string; source: string; selfTests: unknown[];
 };
 const fixture = JSON.parse(await readFile(new URL('../fixtures/merge-intervals.json', import.meta.url), 'utf8')) as {
   cases: Array<{ name: string; args: unknown[]; expected: unknown }>;
 };
-const seededCandidate = AuthorOutputSchema.parse({
+const mockedIncorrectCandidate = AuthorOutputSchema.parse({
   kind: 'candidate', functionName: weak.functionName, solutionTs: weak.source, cases: weak.selfTests,
 });
 const boundaryCases = fixture.cases
   .filter(testCase => ['unsorted-disjoint', 'overlap', 'touching'].includes(testCase.name))
   .map(testCase => TestCaseSchema.parse(testCase));
+// Вычисляет хеш исходного кода, чтобы отчёт однозначно указывал проверенную версию.
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 
 const base = path.resolve(process.env.LIVE_REVIEW_DATA_DIR ?? '.local-data');
@@ -33,20 +34,21 @@ const dataDir = await mkdtemp(path.join(base, 'live-review-feedback-'));
 const artifacts = new LocalArtifactStore(dataDir);
 const checks = new QuickJsCheckRunner(artifacts);
 const real = new CodexCliPort();
-const calls: Array<{ role: string; modelId: string; source: 'fixture' | 'codex-cli'; verdict?: string; findings?: string[] }> = [];
+const calls: Array<{ role: string; modelId: string; source: 'mocked-incorrect-author-version' | 'codex-cli'; verdict?: string; findings?: string[] }> = [];
 let authorCount = 0;
 let secondAuthorSawReview = false;
 
 const codex: CodexPort = {
+  // Подставляет только первую ошибочную версию автора; остальные вызовы выполняет через настоящий Codex CLI.
   async run(request, hooks): Promise<CodexRunResult> {
     if (request.role === 'author' && authorCount++ === 0) {
       await hooks.onObservation({
-        at: new Date().toISOString(), source: 'seeded-author-fixture',
-        name: 'first_author_response_replaced_with_known_bug', stage: 'process_event', detail: null,
+        at: new Date().toISOString(), source: 'mocked-incorrect-author-version',
+        name: 'mocked_incorrect_author_version_supplied', stage: 'process_event', detail: null,
       });
-      calls.push({ role: request.role, modelId: request.modelId, source: 'fixture' });
-      console.log('1/4: дефектная первая версия внедрена из fixture; облачный автор не вызывался.');
-      return { output: seededCandidate, modelId: request.modelId, responseAt: new Date().toISOString() };
+      calls.push({ role: request.role, modelId: request.modelId, source: 'mocked-incorrect-author-version' });
+      console.log('1/4: подставлена замоканная версия с намеренной ошибкой; облачный автор не вызывался.');
+      return { output: mockedIncorrectCandidate, modelId: request.modelId, responseAt: new Date().toISOString() };
     }
     if (request.role === 'author') {
       const context = JSON.parse(request.contextText) as { latestReview?: { verdict?: string; findings?: unknown[] }; currentArtifact?: { versionId?: string } };
@@ -65,6 +67,7 @@ const codex: CodexPort = {
   },
 };
 
+// Сохраняет версию и проверяет её на независимых граничных случаях в изолированном QuickJS.
 async function checkBoundary(source: string, name: string) {
   const checkStore = new LocalArtifactStore(path.join(dataDir, 'independent-checks'));
   const ref = await checkStore.writeVersion({
@@ -79,9 +82,9 @@ async function checkBoundary(source: string, name: string) {
 const service = await createAppService({ dataDir, executionMode: 'real', ports: { codex, artifacts, checks } });
 let taskId: string | null = null;
 try {
-  const firstBoundary = await checkBoundary(seededCandidate.solutionTs, 'known-bug');
+  const firstBoundary = await checkBoundary(mockedIncorrectCandidate.solutionTs, 'known-bug');
   assert.equal(firstBoundary.compilation.status, 'passed');
-  assert.equal(firstBoundary.tests.status, 'failed', 'Seeded code must fail independent boundary cases');
+  assert.equal(firstBoundary.tests.status, 'failed', 'Замоканная версия с намеренной ошибкой должна провалить независимые граничные проверки');
 
   taskId = (await service.createTask({ text: TASK_EXAMPLES[0]!.text })).taskId;
   const deadline = Date.now() + 10 * 60_000;
@@ -101,7 +104,10 @@ try {
   const finalBoundary = correctedSource ? await checkBoundary(correctedSource, 'corrected-code') : null;
   const report = {
     taskId, dataDir, phase: snapshot.task.phase, stopReason: snapshot.task.stopReason,
-    injectedFirstVersion: true, seededSourceSha256: sha256(seededCandidate.solutionTs),
+    executionKind: 'mixed',
+    firstVersionSource: 'mocked-incorrect-author-version',
+    firstVersionDescription: 'Замоканная версия с намеренной ошибкой',
+    mockedIncorrectSourceSha256: sha256(mockedIncorrectCandidate.solutionTs),
     firstIndependentChecks: { status: firstBoundary.tests.status, failedCases: firstBoundary.failedCases },
     calls, secondAuthorSawReview, createdVersions: snapshot.state.createdVersions,
     usedModelCalls: snapshot.state.usedModelCalls, actualCloudCalls: calls.filter(call => call.source === 'codex-cli').length,
@@ -116,13 +122,13 @@ try {
   console.log(JSON.stringify(report, null, 2));
 
   assert.deepEqual(calls.map(call => call.role), ['author', 'reviewer', 'author', 'reviewer']);
-  assert.deepEqual(calls.map(call => call.source), ['fixture', 'codex-cli', 'codex-cli', 'codex-cli']);
+  assert.deepEqual(calls.map(call => call.source), ['mocked-incorrect-author-version', 'codex-cli', 'codex-cli', 'codex-cli']);
   assert.equal(firstReview?.verdict, 'changes_requested', 'Real reviewer must reject the known bug');
   assert.ok(firstReview.findings?.length, 'Real reviewer must explain its objection');
   assert.match(firstReview.findings.join(' '), /merge|overlap|touch|sort|объедин|пересеч|соприкаса|сортир/i,
     'Reviewer finding must identify a relevant failure, not just request arbitrary changes');
   assert.ok(secondAuthorSawReview, 'Real author must receive the stored review and version');
-  assert.notEqual(correctedSource, seededCandidate.solutionTs, 'Real author must change the code');
+  assert.notEqual(correctedSource, mockedIncorrectCandidate.solutionTs, 'Real author must change the code');
   assert.equal(finalBoundary?.tests.status, 'passed', 'Corrected code must pass independent boundary cases');
   assert.equal(secondReview?.verdict, 'approved', 'Real reviewer must approve the corrected version');
   assert.equal(snapshot.task.phase, 'awaiting_approval');

@@ -1,19 +1,20 @@
 import { appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createAppService } from '../../../src/server/workflow/service.js';
-import { createFakeCodexPort } from '../../../src/server/codex/fake-port.js';
+import { createMockCodexPort } from '../../../src/server/codex/mock-port.js';
 import { LocalArtifactStore } from '../../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../../src/server/checks/quickjs-runner.js';
 const root = process.argv[2]!;
 const mode = process.argv[3]!;
 try {
   const artifacts = new LocalArtifactStore(root);
-  const fake = createFakeCodexPort('no_response');
-  const service = await createAppService({ dataDir: root, executionMode: 'fake', ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: {
+  const mock = createMockCodexPort('no_response');
+  const service = await createAppService({ dataDir: root, executionMode: 'mock', ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: {
+    // Записывает попытку на диск перед выполнением управляемого mock-сценария.
     async run(request, hooks) {
       await appendFile(path.join(root, 'qa-calls.jsonl'), JSON.stringify({ role: request.role, attemptId: request.attemptId }) + '\n');
       process.send?.({ event: 'external-started', taskId: request.taskId });
-      return fake.run(request, hooks);
+      return mock.run(request, hooks);
     },
   } } });
   if (mode === 'hang') {

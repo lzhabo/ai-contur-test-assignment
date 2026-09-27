@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test';
 
-// Start an isolated fake-cloud backend on 4318 before running this suite.
+// Перед запуском сценариев запустите изолированный сервер с mock-ответами моделей на порту 4318.
 export default defineConfig({
   testDir: '.',
   testMatch: '**/*.spec.ts',

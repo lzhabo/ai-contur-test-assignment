@@ -51,13 +51,13 @@ npm test
 npm run build
 ```
 
-Тестовые сценарии с имитацией облака запускаются явно; они не доказывают доступ к реальным моделям:
+Mock-сценарии используют заранее заданные ответы моделей и запускаются явно. Реальное подключение к Codex проверяется отдельными прогонами:
 
 ```sh
-APP_CODEX_MODE=fake APP_FAKE_SCENARIO=review_once APP_DATA_DIR=.local-data/demo-review npm start
+APP_CODEX_MODE=mock APP_MOCK_SCENARIO=review_once APP_DATA_DIR=.local-data/demo-review npm start
 ```
 
-Сценарии: `happy`, `review_once`, `review_loop`, `no_response`, `slow`. По умолчанию используется `real`. Режим задачи сохраняется вместе с состоянием и показан в интерфейсе. Пользователь не должен принимать fake-прогон за настоящие ответы моделей.
+Сценарии: `happy`, `review_once`, `review_loop`, `no_response`, `slow`. По умолчанию используется `real`. Режим задачи сохраняется вместе с состоянием и показан в интерфейсе. Пользователь не должен принимать mock-прогон за настоящие ответы моделей.
 
 ## Структура и документы
 
@@ -71,7 +71,7 @@ APP_CODEX_MODE=fake APP_FAKE_SCENARIO=review_once APP_DATA_DIR=.local-data/demo-
 - [ТЗ](tasks/two-model-loop/brief.md), [архитектура](tasks/two-model-loop/architecture.md), [план](tasks/two-model-loop/plan.md), [решения](tasks/two-model-loop/decisions.md).
 - [Исходное задание](tasks/two-model-loop/source/new-test-task-from-bio.txt) сохранено без изменений.
 - [Матрица переноса Fastify → Express](tasks/express-migration/plan.md), [проверки переноса](tasks/express-migration/verification.md).
-- [Настоящие переписки](tasks/two-model-loop/delivery/conversations/README.md), [сценарий демонстрации](tasks/two-model-loop/delivery/demo.md).
+- [Настоящие переписки](tasks/two-model-loop/delivery/conversations/README.md), [архивный сценарий демонстрации первой версии](tasks/two-model-loop/delivery/demo.md).
 
 Правила совместной разработки находятся в `AGENTS.md` и `workflow/PROCESS.md`. Это инструкции команде разработчиков, а не реализация графа агентов продукта.
 # ai-contur-test-assignment
@@ -82,7 +82,9 @@ APP_CODEX_MODE=fake APP_FAKE_SCENARIO=review_once APP_DATA_DIR=.local-data/demo-
 
 Дополнительная кнопка «Сложный пример: расчёт корзины» заполняет более подробный запрос из `src/shared/advanced-example.ts`. Она не запускает агентов автоматически. Этот пример предназначен для реальных моделей; тестовый адаптер поддерживает три базовые функции.
 
-[Пошаговая проверка цикла, отсутствия ответа и бесконечной функции](tasks/two-model-loop/delivery/testing-guide.md) содержит команды и ожидаемые результаты. Сценарий `review_once` теперь воспроизводит реальную ошибку в первом черновике и исправление во втором, только в тестовом режиме.
+[Актуальные команды mock, реального и смешанного прогона](tasks/architecture-rework/testing-guide.md) описывают запуск новой версии. [Инструкция первой версии](tasks/two-model-loop/delivery/testing-guide.md) сохранена как архивная; её команды относятся к прежней ветке. В mock-сценарии `review_once` первая версия — **замоканная версия с намеренной ошибкой**, следующая — исправленная замоканная версия. Оба ответа заданы тестовым адаптером.
+
+В `npm run test:live-review` первая версия также замокана с намеренной ошибкой, а ревью и последующее исправление выполняет настоящий Codex. Это смешанный сценарий; отчёт явно указывает происхождение каждого ответа.
 
 Диагностические JSON-логи сервера выводятся в терминал и `.local-data/server-events.jsonl` (или в выбранный `APP_DATA_DIR`). При размере около 5 MiB предыдущий файл сохраняется как `server-events.jsonl.1`; это ограниченный диагностический журнал, не полный бессрочный аудит.
 

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { createAppService, type AppService } from '../../src/server/workflow/service.js';
-import { createFakeCodexPort } from '../../src/server/codex/fake-port.js';
+import { createMockCodexPort } from '../../src/server/codex/mock-port.js';
 import { LocalArtifactStore } from '../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../src/server/checks/quickjs-runner.js';
 import { DEFAULT_LIMITS, type DecisionRequest, type TaskSnapshotResponse, type CodexRunRequest } from '../../src/shared/index.js';
@@ -13,14 +13,15 @@ afterEach(async () => {
   await Promise.allSettled(services.splice(0).map(service => service.close()));
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
-async function setup(scenario: Parameters<typeof createFakeCodexPort>[0] = 'happy') {
+// Создаёт изолированный сервис с mock-ответами и записывает переданные модели запросы.
+async function setup(scenario: Parameters<typeof createMockCodexPort>[0] = 'happy') {
   const root = await mkdtemp(path.join(tmpdir(), 'loop-qa-service-')); roots.push(root);
   const artifacts = new LocalArtifactStore(root);
-  const fake = createFakeCodexPort(scenario);
+  const mock = createMockCodexPort(scenario);
   const calls: CodexRunRequest[] = [];
-  const options = { dataDir: root, executionMode: 'fake' as const,
+  const options = { dataDir: root, executionMode: 'mock' as const,
     limits: { ...DEFAULT_LIMITS, modelTimeoutMs: scenario === 'no_response' ? 50 : 10000 },
-    ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: { run: (request: CodexRunRequest, hooks: Parameters<typeof fake.run>[1]) => { calls.push(request); return fake.run(request, hooks); } } } };
+    ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: { run: (request: CodexRunRequest, hooks: Parameters<typeof mock.run>[1]) => { calls.push(request); return mock.run(request, hooks); } } } };
   const service = await createAppService(options); services.push(service);
   return { root, service, options, calls };
 }

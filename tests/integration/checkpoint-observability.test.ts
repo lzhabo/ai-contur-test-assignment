@@ -4,7 +4,7 @@ import path from 'node:path';
 import { expect, it } from 'vitest';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import { createAppService, type AppService } from '../../src/server/workflow/service.js';
-import { createFakeCodexPort } from '../../src/server/codex/fake-port.js';
+import { createMockCodexPort } from '../../src/server/codex/mock-port.js';
 import { LocalArtifactStore } from '../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../src/server/checks/quickjs-runner.js';
 import { createStructuredLogger, type LogEvent, type ObservabilityLogger } from '../../src/server/observability/logger.js';
@@ -48,11 +48,11 @@ it('checkpoint logs describe already-readable SQLite snapshots and exclude promp
   let service: AppService | undefined;
   try {
     const artifacts = new LocalArtifactStore(directory);
-    const fake = createFakeCodexPort('happy');
-    service = await createAppService({ dataDir: directory, executionMode: 'fake', logger: observed, ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: {
+    const mock = createMockCodexPort('happy');
+    service = await createAppService({ dataDir: directory, executionMode: 'mock', logger: observed, ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: {
       async run(request, hooks) {
         await hooks.onObservation({ at: new Date().toISOString(), source: 'qa', name: 'local.test', stage: 'local_started', detail: `Bearer ${markers[3]}` });
-        const result = await fake.run(request, hooks);
+        const result = await mock.run(request, hooks);
         if (result.output.kind === 'candidate') result.output.solutionTs += `\n// ${markers[1]}`;
         if (result.output.kind === 'review') result.output.findings = [markers[2]!];
         return result;

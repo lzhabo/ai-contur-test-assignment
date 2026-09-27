@@ -23,7 +23,7 @@ export function App() {
   const [taskId, setTaskId] = useState<string | null>(fromHash);
   const [tasks, setTasks] = useState<TaskSummary[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [serverMode, setServerMode] = useState<'real' | 'fake' | null>(null);
+  const [serverMode, setServerMode] = useState<'real' | 'mock' | null>(null);
   const [snapshot, setSnapshot] = useState<TaskSnapshotResponse | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -47,7 +47,7 @@ export function App() {
     return data;
   }, []);
 
-  useEffect(() => { void request('/api/health').then(data => { const mode = (data as { executionMode?: unknown } | null)?.executionMode; if (mode === 'real' || mode === 'fake') setServerMode(mode); }).catch(() => {}); }, []);
+  useEffect(() => { void request('/api/health').then(data => { const mode = (data as { executionMode?: unknown } | null)?.executionMode; if (mode === 'real' || mode === 'mock') setServerMode(mode); }).catch(() => {}); }, []);
   useEffect(() => { const handler = () => { setTaskId(fromHash()); setError(''); }; window.addEventListener('hashchange', handler); return () => window.removeEventListener('hashchange', handler); }, []);
   useEffect(() => { void loadList().catch(e => setError(errorMessage(e))); const timer = setInterval(() => void loadList().catch(() => {}), 5000); return () => clearInterval(timer); }, [loadList]);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer); }, []);
@@ -113,12 +113,12 @@ export function App() {
       <div className="sidebar-footer"><span className="status-dot" />Локальная рабочая папка<br />TypeScript · три агента · две модели</div>
     </aside>
     <main className="main">
-      <header className="topbar"><span className="breadcrumb">Рабочее пространство / {taskId ? 'Задача' : 'Новая задача'}</span><span className="local-badge">{serverMode === 'fake' ? 'ТЕСТОВЫЙ РЕЖИМ · БЕЗ ОБЛАКА' : 'НА ВАШЕМ MAC · МОДЕЛИ В ОБЛАКЕ'}</span></header>
+      <header className="topbar"><span className="breadcrumb">Рабочее пространство / {taskId ? 'Задача' : 'Новая задача'}</span><span className="local-badge">{serverMode === 'mock' ? 'ТЕСТОВЫЙ РЕЖИМ · БЕЗ ОБЛАКА' : 'НА ВАШЕМ MAC · МОДЕЛИ В ОБЛАКЕ'}</span></header>
       <div className="page">
         {error && <div className="notice error page-error" role="alert">{error}<button className="text-button" aria-label="Закрыть сообщение об ошибке" onClick={() => setError('')}>×</button></div>}
         {!taskId ? <>
           <div className="intro"><div className="eyebrow">От идеи к проверенной функции</div><h1>Опишите задачу.<br />Агенты займутся кодом.</h1><p>Автор напишет функцию, ревьюер проверит её и вернёт замечания. Вы просмотрите предложение и решите, сохранять ли результат.</p></div>
-          {serverMode === 'fake' && <div className="notice warning">Тестовый режим: ответы агентов имитируются. Облачные модели не вызываются.</div>}
+          {serverMode === 'mock' && <div className="notice warning">Тестовый режим: ответы агентов имитируются. Облачные модели не вызываются.</div>}
           {activeId && <div className="notice warning">Сейчас выполняется другая задача. <button className="text-button" onClick={() => { navigate(activeId); setTaskId(activeId); }}>Открыть её →</button></div>}
           <form className="composer" onSubmit={e => { e.preventDefault(); void create(); }}>
             <label htmlFor="task-text">Что должна делать функция?</label>
@@ -132,7 +132,7 @@ export function App() {
           <p className="scope-note">Одна чистая синхронная функция с JSON-входом и результатом. Без сети, файлов и сторонних зависимостей. Для каждой задачи создаётся отдельная папка результата.</p>
         </> : !snapshot ? <div className="empty" role="status">Загружаем сохранённую задачу…</div> : <>
           <div className="task-heading"><div><div className="eyebrow">{PHASES[snapshot.task.phase]}</div><h1>{snapshot.task.title}</h1><p className="task-request">{snapshot.state.taskText}</p></div>{snapshot.actions.canStop && <button className="danger" onClick={() => void stop()} disabled={busy}>Остановить</button>}</div>
-          {snapshot.state.executionMode === 'fake' && <div className="notice warning"><strong>Тестовый режим.</strong> Ответы агентов имитируются локально. Этот прогон проверяет работу приложения, но не подключение к облачным моделям.</div>}
+          {snapshot.state.executionMode === 'mock' && <div className="notice warning"><strong>Тестовый режим.</strong> Ответы агентов имитируются локально. Этот прогон проверяет работу приложения, но не подключение к облачным моделям.</div>}
           {!connected && <div className="notice warning" role="status">Нет соединения с потоком событий. Пробуем подключиться снова; показано последнее полученное состояние. Это не подтверждение завершения работы.</div>}
           {snapshot.task.stopReason && <div className={`notice ${snapshot.task.phase === 'completed' ? '' : 'warning'}`}><strong>{PHASES[snapshot.task.phase]}.</strong> {snapshot.task.stopReason}</div>}
           {pending && <div className={`notice ${age >= 30 ? 'warning' : ''}`} role="status"><strong>{ROLES[pending.role]}: ожидаем результат {age} с.</strong>{age >= 30 && <p>Ответ пока не получен. Можно продолжать ждать или остановить задачу.</p>}<br />Последнее наблюдение: {pending.lastObservedStage || 'Попытка сохранена; подтверждения запуска ещё нет'}.{pending.lastObservedAt && ` ${time(pending.lastObservedAt)}`}<br /><small>Запуск локального процесса сам по себе не подтверждает доставку облачной модели.</small></div>}

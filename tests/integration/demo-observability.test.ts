@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { createAppService, type AppService } from '../../src/server/workflow/service.js';
-import { createFakeCodexPort, type FakeScenario } from '../../src/server/codex/fake-port.js';
+import { createMockCodexPort, type MockScenario } from '../../src/server/codex/mock-port.js';
 import { LocalArtifactStore } from '../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../src/server/checks/quickjs-runner.js';
 import { DEFAULT_LIMITS, type CheckResult, type CodexPort, type CodexRunRequest, type CodexOutput, type RuntimeLimits, type TaskSnapshotResponse } from '../../src/shared/index.js';
@@ -14,21 +14,22 @@ afterEach(async () => {
   await Promise.allSettled([...services].map(service => service.close())); services.clear();
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
-async function setup(scenario: FakeScenario, overrides: Partial<RuntimeLimits> = {}) {
+// Создаёт mock-сценарий и сохраняет запросы, ответы и результаты настоящего выполнения проверок.
+async function setup(scenario: MockScenario, overrides: Partial<RuntimeLimits> = {}) {
   const root = await mkdtemp(path.join(tmpdir(), 'loop-qa-demo-')); roots.push(root);
   const artifacts = new LocalArtifactStore(root);
   const checks = new QuickJsCheckRunner(artifacts);
-  const fake = createFakeCodexPort(scenario);
+  const mock = createMockCodexPort(scenario);
   const calls: CodexRunRequest[] = [];
   const outputs: CodexOutput[] = [];
   const checked: CheckResult[] = [];
   const codex: CodexPort = { async run(request, hooks) {
     calls.push(request);
-    const result = await fake.run(request, hooks);
+    const result = await mock.run(request, hooks);
     outputs.push(structuredClone(result.output));
     return result;
   } };
-  const options = { dataDir: root, executionMode: 'fake' as const,
+  const options = { dataDir: root, executionMode: 'mock' as const,
     limits: { ...DEFAULT_LIMITS, ...overrides }, ports: { artifacts, codex, checks: {
       async run(...args: Parameters<QuickJsCheckRunner['run']>) {
         const result = await checks.run(...args); checked.push(result); return result;
@@ -48,7 +49,7 @@ async function waitFor(service: AppService, id: string, matches: (snapshot: Task
   throw new Error(`Expected demo phase missing: ${JSON.stringify(last)}`);
 }
 
-it.each(['mergeIntervals', 'catify', 'shortestPath'])('review_once %s demonstrates an actual failing function, review findings and a corrected passing second version', async functionName => {
+it.each(['mergeIntervals', 'catify', 'shortestPath'])('review_once %s: замоканная версия с намеренной ошибкой получает замечания и заменяется исправленной mock-версией', async functionName => {
   const f = await setup('review_once');
   const { taskId } = await f.service.createTask({ text: `Implement ${functionName}; include boundary cases and do not mutate input.` });
   const paused = await waitFor(f.service, taskId, value => value.actions.canDecide);

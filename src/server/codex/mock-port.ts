@@ -1,7 +1,7 @@
 import type { AuthorOutput, CodexOutput } from "../../shared/contracts.js";
 import type { CodexPort, CodexRunHooks, CodexRunRequest, CodexRunResult } from "../../shared/ports.js";
 
-export type FakeScenario = "happy" | "review_loop" | "no_response" | "review_once" | "slow";
+export type MockScenario = "happy" | "review_loop" | "no_response" | "review_once" | "slow";
 
 const candidates: Record<string, AuthorOutput> = {
   mergeIntervals: {
@@ -55,8 +55,10 @@ const candidates: Record<string, AuthorOutput> = {
   },
 };
 
-function abortError(): Error { return Object.assign(new Error("Fake Codex aborted"), { name: "AbortError" }); }
+// Создаёт ошибку отмены вызова замоканной модели.
+function abortError(): Error { return Object.assign(new Error("Mock Codex aborted"), { name: "AbortError" }); }
 
+// Ожидает заданную задержку и прекращает ожидание при отмене задачи.
 function wait(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) return reject(abortError());
@@ -66,10 +68,12 @@ function wait(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-export function createFakeCodexPort(scenario: FakeScenario): CodexPort {
+// Создаёт mock-адаптер с управляемыми ответами для проверки выбранного сценария.
+export function createMockCodexPort(scenario: MockScenario): CodexPort {
   return {
+    // Возвращает замоканный ответ роли и записывает наблюдаемые этапы вызова.
     async run(request: CodexRunRequest, hooks: CodexRunHooks): Promise<CodexRunResult> {
-      await hooks.onObservation({ at: new Date().toISOString(), source: "fake-adapter", name: "fake.started", stage: "local_started", detail: request.role });
+      await hooks.onObservation({ at: new Date().toISOString(), source: "mock-adapter", name: "mock.started", stage: "local_started", detail: request.role });
       if (scenario === "no_response") await wait(request.timeoutMs + 100, hooks.signal);
       else if (scenario === "slow") await wait(Math.min(request.timeoutMs / 2, 1_000), hooks.signal);
       else if (hooks.signal.aborted) throw abortError();
@@ -79,8 +83,8 @@ export function createFakeCodexPort(scenario: FakeScenario): CodexPort {
         const context = JSON.parse(request.contextText) as { taskText: string; createdVersions: number };
         const candidate = context.taskText.includes("shortestPath") ? candidates.shortestPath : context.taskText.includes("catify") ? candidates.catify : candidates.mergeIntervals;
         output = structuredClone(candidate);
-        // Explicit demo fault: version one fails a boundary case, version two
-        // repairs the code. The real adapter never injects errors or fake reviews.
+        // Замоканная версия с намеренной ошибкой: первый ответ автора нарушает
+        // граничный случай, следующий исправляет его. Настоящие ответы не подменяются этим адаптером.
         if (scenario === "review_once" && context.createdVersions === 0) {
           if (candidate.functionName === "catify") output.solutionTs = output.solutionTs.replace("\\p{L}+", "[A-Za-z]+");
           else if (candidate.functionName === "shortestPath") output.solutionTs = output.solutionTs.replace("return path;", "return path.length === 1 ? [] : path;");
@@ -96,7 +100,7 @@ export function createFakeCodexPort(scenario: FakeScenario): CodexPort {
         const parsed = JSON.parse(request.contextText) as { currentArtifact: { versionId: string; manifestHash: string } };
         output = { kind: "apply_request", versionId: parsed.currentArtifact.versionId, manifestHash: parsed.currentArtifact.manifestHash };
       }
-      await hooks.onObservation({ at: new Date().toISOString(), source: "fake-adapter", name: "fake.completed", stage: "process_exited", detail: null });
+      await hooks.onObservation({ at: new Date().toISOString(), source: "mock-adapter", name: "mock.completed", stage: "process_exited", detail: null });
       return { output, modelId: request.modelId, responseAt: new Date().toISOString() };
     },
   };

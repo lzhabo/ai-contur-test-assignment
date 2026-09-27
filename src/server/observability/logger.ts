@@ -46,7 +46,7 @@ export interface LogEvent {
   checkpointId?: string | null;
   parentCheckpointId?: string | null;
   source?: string;
-  executionMode?: "real" | "fake";
+  executionMode?: "real" | "mock";
   before?: StateSummary | null;
   after?: StateSummary | null;
   changed?: string[];

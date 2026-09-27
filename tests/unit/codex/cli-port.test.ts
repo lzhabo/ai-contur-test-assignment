@@ -7,8 +7,9 @@ import type { CodexRunRequest } from "../../../src/shared/ports.js";
 
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
-async function fakeCli(body: string | ((root: string) => string)): Promise<{ binary: string; root: string }> {
-  const root = await mkdtemp(path.join(os.tmpdir(), "fake-codex-"));
+// Создаёт временный исполняемый mock Codex CLI, который воспроизводит заданное поведение процесса.
+async function mockCli(body: string | ((root: string) => string)): Promise<{ binary: string; root: string }> {
+  const root = await mkdtemp(path.join(os.tmpdir(), "mock-codex-"));
   roots.push(root);
   const binary = path.join(root, "codex");
   await writeFile(binary, `#!/usr/bin/env node\nif (process.argv[2] === '--version') { console.log('codex-cli 0.156.1'); process.exit(0); }\n${typeof body === "string" ? body : body(root)}\n`, { mode: 0o700 });
@@ -20,7 +21,7 @@ const transportAnswer = answer;
 
 describe("Codex CLI boundary", () => {
   it("accepts one structured result after progress while passing exact no-tools flags", async () => {
-    const { binary, root } = await fakeCli((root) => `
+    const { binary, root } = await mockCli((root) => `
       require('node:fs').writeFileSync(${JSON.stringify(path.join(root, "args.json"))}, JSON.stringify(process.argv.slice(2)));
       const flags = process.argv.slice(2);
       require('node:fs').copyFileSync(flags[flags.indexOf('--output-schema') + 1], ${JSON.stringify(path.join(root, "schema.json"))});
@@ -47,19 +48,19 @@ describe("Codex CLI boundary", () => {
 
   it("accepts nested object and array JSON test cases", async () => {
     const nested = { kind: "candidate", functionName: "scan", solutionTs: "export function scan(value: unknown) { return value; }", cases: [{ name: "graph", args: [{ nodes: [{ id: "A", edges: ["B"] }, { id: "B", edges: [] }] }], expected: { seen: ["A", "B"] } }] };
-    const { binary } = await fakeCli(`console.log(JSON.stringify({type:'turn.started'})); console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:${JSON.stringify(JSON.stringify(nested))}}})); console.log(JSON.stringify({type:'turn.completed'}));`);
+    const { binary } = await mockCli(`console.log(JSON.stringify({type:'turn.started'})); console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:${JSON.stringify(JSON.stringify(nested))}}})); console.log(JSON.stringify({type:'turn.completed'}));`);
     const result = await new CodexCliPort(binary).run(request, { signal: new AbortController().signal, onObservation: async () => {} });
     expect(result.output).toEqual(nested);
   });
 
   it("fails closed on a tool execution event", async () => {
-    const { binary } = await fakeCli(`console.log(JSON.stringify({type:'turn.started'})); console.log(JSON.stringify({type:'item.started',item:{type:'command_execution',command:'cat /secret'}})); setInterval(()=>{},1000);`);
+    const { binary } = await mockCli(`console.log(JSON.stringify({type:'turn.started'})); console.log(JSON.stringify({type:'item.started',item:{type:'command_execution',command:'cat /secret'}})); setInterval(()=>{},1000);`);
     await expect(new CodexCliPort(binary).run(request, { signal: new AbortController().signal, onObservation: async () => {} })).rejects.toThrow(/Unexpected Codex event/);
   });
 
   it("decodes a UTF-8 character split across stdout chunks", async () => {
     const unicode = { ...transportAnswer, solutionTs: `${transportAnswer.solutionTs} // мяу` };
-    const { binary } = await fakeCli(`
+    const { binary } = await mockCli(`
       console.log(JSON.stringify({type:'turn.started'}));
       const line = JSON.stringify({type:'item.completed',item:{type:'agent_message',text:${JSON.stringify(JSON.stringify(unicode))}}}) + '\\n';
       const bytes = Buffer.from(line);
@@ -72,7 +73,7 @@ describe("Codex CLI boundary", () => {
   });
 
   it("aborts a hanging CLI process and its child", async () => {
-    const { binary, root } = await fakeCli((root) => `
+    const { binary, root } = await mockCli((root) => `
       const child = require('node:child_process').spawn('sleep',['60'],{stdio:'ignore'});
       require('node:fs').writeFileSync(${JSON.stringify(path.join(root, "child.pid"))}, String(child.pid));
       console.log(JSON.stringify({type:'turn.started'}));

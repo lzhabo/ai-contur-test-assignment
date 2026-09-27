@@ -6,7 +6,7 @@ import { QuickJsCheckRunner } from "../checks/quickjs-runner.js";
 import { CodexCliPort } from "../codex/cli-port.js";
 import { createHttpApp, closeHttpStreams } from "../http/app.js";
 import { installFrontendFallback } from "../http/frontend.js";
-import { createFakeCodexPort } from "../codex/fake-port.js";
+import { createMockCodexPort } from "../codex/mock-port.js";
 import { createAppService } from "../workflow/service.js";
 import { createStructuredLogger, safeErrorClass } from "../observability/logger.js";
 
@@ -16,7 +16,7 @@ const artifacts = new LocalArtifactStore(dataDir);
 const logger = await createStructuredLogger(dataDir);
 const service = await createAppService({
   dataDir,
-  ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: config.executionMode === "fake" ? createFakeCodexPort(config.fakeScenario) : new CodexCliPort() },
+  ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: config.executionMode === "mock" ? createMockCodexPort(config.mockScenario) : new CodexCliPort() },
   models: config.models,
   limits: config.limits,
   executionMode: config.executionMode,

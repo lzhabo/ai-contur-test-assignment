@@ -3,20 +3,21 @@ import { appendFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Command } from '@langchain/langgraph';
 import { createTaskGraph } from '../../../src/server/workflow/graph.js';
-import { createFakeCodexPort } from '../../../src/server/codex/fake-port.js';
+import { createMockCodexPort } from '../../../src/server/codex/mock-port.js';
 import { LocalArtifactStore } from '../../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../../src/server/checks/quickjs-runner.js';
 import { EventJournal } from '../../../src/server/events/journal.js';
 import { TaskStateSchema, DEFAULT_LIMITS, DEFAULT_MODELS } from '../../../src/shared/index.js';
 const root = process.argv[2]!;
 const mode = process.argv[3]!;
-const fake = createFakeCodexPort('happy');
+const mock = createMockCodexPort('happy');
 const artifacts = new LocalArtifactStore(root);
 const graph = createTaskGraph(path.join(root, 'checkpoints.sqlite'), {
   ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), events: new EventJournal(root), codex: {
+    // Записывает попытку на диск перед выполнением управляемого mock-сценария.
     async run(request, hooks) {
       await appendFile(path.join(root, 'qa-calls.jsonl'), JSON.stringify({ role: request.role, attemptId: request.attemptId }) + '\n');
-      return fake.run(request, hooks);
+      return mock.run(request, hooks);
     },
   } }, registerAbort() {}, clearAbort() {}, isStopRequested: () => false,
 });
@@ -24,7 +25,7 @@ const config = { configurable: { thread_id: 'qa-process' }, durability: 'sync' a
 try {
   if (mode === 'seed') {
     const now = new Date().toISOString();
-    const value = TaskStateSchema.parse({ schemaVersion: 1, executionMode: 'fake', taskId: 'qa-process', taskText: 'Implement mergeIntervals.', models: DEFAULT_MODELS,
+    const value = TaskStateSchema.parse({ schemaVersion: 1, executionMode: 'mock', taskId: 'qa-process', taskText: 'Implement mergeIntervals.', models: DEFAULT_MODELS,
       phase: 'preparing', currentArtifact: null, latestReview: null, latestChecks: null, approval: null, limits: DEFAULT_LIMITS, usedModelCalls: 0, createdVersions: 0,
       activeAttempt: null, lastAttempt: null, stopReason: null, resultPath: null, createdAt: now, updatedAt: now, lastEventSequence: 0 });
     const result = await graph.invoke({ value }, config);

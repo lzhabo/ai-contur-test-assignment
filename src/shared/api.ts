@@ -71,7 +71,7 @@ export type CheckSummary = z.infer<typeof CheckSummarySchema>;
 
 export const TaskViewStateSchema = z.object({
   taskText: z.string(),
-  executionMode: z.enum(["real", "fake"]),
+  executionMode: z.enum(["real", "mock"]),
   models: z.object({ author: z.string(), reviewer: z.string(), applier: z.string() }),
   currentVersionId: z.string().nullable(),
   currentManifestHash: z.string().nullable(),

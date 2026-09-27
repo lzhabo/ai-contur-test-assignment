@@ -5,7 +5,7 @@ import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import { afterEach, expect, it } from "vitest";
 import { LocalArtifactStore } from "../../../src/server/artifacts/local-store.js";
 import { QuickJsCheckRunner } from "../../../src/server/checks/quickjs-runner.js";
-import { createFakeCodexPort } from "../../../src/server/codex/fake-port.js";
+import { createMockCodexPort } from "../../../src/server/codex/mock-port.js";
 import { createStructuredLogger, type ObservabilityLogger } from "../../../src/server/observability/logger.js";
 import { createAppService, type AppService } from "../../../src/server/workflow/service.js";
 
@@ -16,10 +16,11 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 
+// Создаёт сервис с mock-ответами моделей и переданным журналом технических событий.
 async function setup(logger: ObservabilityLogger, root: string) {
   const artifacts = new LocalArtifactStore(root);
-  const service = await createAppService({ dataDir: root, executionMode: "fake", logger,
-    ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: createFakeCodexPort("happy") } });
+  const service = await createAppService({ dataDir: root, executionMode: "mock", logger,
+    ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: createMockCodexPort("happy") } });
   services.push(service);
   return service;
 }

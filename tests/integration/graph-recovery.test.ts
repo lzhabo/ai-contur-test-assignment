@@ -4,13 +4,14 @@ import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { Command } from '@langchain/langgraph';
 import { createTaskGraph } from '../../src/server/workflow/graph.js';
-import { createFakeCodexPort } from '../../src/server/codex/fake-port.js';
+import { createMockCodexPort } from '../../src/server/codex/mock-port.js';
 import { LocalArtifactStore } from '../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../src/server/checks/quickjs-runner.js';
 import { EventJournal } from '../../src/server/events/journal.js';
 import { DEFAULT_LIMITS, DEFAULT_MODELS, TaskStateSchema, type CodexPort, type CodexRunRequest } from '../../src/shared/index.js';
 const roots: string[] = [];
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+// Собирает граф с настоящим хранилищем и переданным портом модели для проверки восстановления.
 async function setup(codex: CodexPort, limits = DEFAULT_LIMITS) {
   const root = await mkdtemp(path.join(tmpdir(), 'loop-qa-graph-')); roots.push(root);
   const artifacts = new LocalArtifactStore(root);
@@ -22,16 +23,17 @@ async function setup(codex: CodexPort, limits = DEFAULT_LIMITS) {
     isStopRequested: () => stopRequested };
   const graph = () => createTaskGraph(path.join(root, 'checkpoints.sqlite'), hooks);
   const time = new Date().toISOString();
-  const state = TaskStateSchema.parse({ schemaVersion: 1, executionMode: 'fake', taskId: 'qa-graph', taskText: 'Implement mergeIntervals.', models: DEFAULT_MODELS,
+  const state = TaskStateSchema.parse({ schemaVersion: 1, executionMode: 'mock', taskId: 'qa-graph', taskText: 'Implement mergeIntervals.', models: DEFAULT_MODELS,
     phase: 'preparing', currentArtifact: null, latestReview: null, latestChecks: null, approval: null, limits, usedModelCalls: 0, createdVersions: 0,
     activeAttempt: null, lastAttempt: null, stopReason: null, resultPath: null, createdAt: time, updatedAt: time, lastEventSequence: 0 });
   const config = { configurable: { thread_id: state.taskId }, durability: 'sync' as const, recursionLimit: 100 };
   return { root, graph, state, config, stop: () => { stopRequested = true; for (const controller of controllers) controller.abort(); } };
 }
-function tracked(scenario: Parameters<typeof createFakeCodexPort>[0]) {
+// Возвращает mock-порт, который сохраняет каждый запрос перед выдачей ответа сценария.
+function tracked(scenario: Parameters<typeof createMockCodexPort>[0]) {
   const calls: CodexRunRequest[] = [];
-  const fake = createFakeCodexPort(scenario);
-  const codex: CodexPort = { run: (request, hooks) => { calls.push(request); return fake.run(request, hooks); } };
+  const mock = createMockCodexPort(scenario);
+  const codex: CodexPort = { run: (request, hooks) => { calls.push(request); return mock.run(request, hooks); } };
   return { calls, codex };
 }
 it('A-04/A-08: a reopened graph restores interrupt and approval invokes only the third role', async () => {
@@ -83,9 +85,9 @@ it('A-02: endless negative review stops under preserved global limits', async ()
 }, 15000);
 
 it('A-08: reviewer approval cannot make a compilation failure eligible for user approval', async () => {
-  const fake = createFakeCodexPort('happy');
+  const mock = createMockCodexPort('happy');
   const codex: CodexPort = { async run(request, hooks) {
-    const result = await fake.run(request, hooks);
+    const result = await mock.run(request, hooks);
     if (result.output.kind === 'candidate') result.output = { ...result.output, solutionTs: 'export function mergeIntervals(): number[][] { return "wrong"; }' };
     return result;
   } };
@@ -98,12 +100,12 @@ it('A-08: reviewer approval cannot make a compilation failure eligible for user 
 }, 10000);
 
 it('A-08: stop during cloud call rejects a late successful reply', async () => {
-  const fake = createFakeCodexPort('happy');
+  const mock = createMockCodexPort('happy');
   let entered!: () => void;
   let release!: () => void;
   const started = new Promise<void>(resolve => { entered = resolve; });
   const gate = new Promise<void>(resolve => { release = resolve; });
-  const codex: CodexPort = { async run(request, hooks) { entered(); await gate; return fake.run(request, { ...hooks, signal: new AbortController().signal }); } };
+  const codex: CodexPort = { async run(request, hooks) { entered(); await gate; return mock.run(request, { ...hooks, signal: new AbortController().signal }); } };
   const f = await setup(codex);
   const running = f.graph().invoke({ value: f.state }, f.config);
   await started;

@@ -1,6 +1,6 @@
 {
   "fixtureVersion": 1,
-  "note": "Declarative test intent only; not Codex events, response schema, HTTP contract or an executable fake adapter. E1 binds these to actual contracts.",
+  "note": "Declarative test intent only; not Codex events, response schema, HTTP contract or an executable mock adapter. E1 binds these to actual contracts.",
   "scenarios": [
     {
       "id": "endless-reviewer",

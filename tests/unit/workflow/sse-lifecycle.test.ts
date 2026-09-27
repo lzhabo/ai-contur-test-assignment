@@ -9,7 +9,7 @@ import { LocalArtifactStore } from "../../../src/server/artifacts/local-store.js
 import { QuickJsCheckRunner } from "../../../src/server/checks/quickjs-runner.js";
 import { createHttpApp } from "../../../src/server/http/app.js";
 import { acquireDataLock } from "../../../src/server/storage/data-lock.js";
-import { createFakeCodexPort } from "../../../src/server/codex/fake-port.js";
+import { createMockCodexPort } from "../../../src/server/codex/mock-port.js";
 import { createAppService, type AppService } from "../../../src/server/workflow/service.js";
 
 const roots: string[] = [];
@@ -32,7 +32,7 @@ async function paused(service: AppService): Promise<{ taskId: string; cursor: nu
 it("opens an idle SSE immediately and closes it with the server, releasing the data lock", async () => {
   const root = await mkdtemp(join(tmpdir(), "loop-sse-close-")); roots.push(root);
   const artifacts = new LocalArtifactStore(root);
-  const service = await createAppService({ dataDir: root, executionMode: "fake", ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: createFakeCodexPort("happy") } });
+  const service = await createAppService({ dataDir: root, executionMode: "mock", ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: createMockCodexPort("happy") } });
   const server = createHttpServer(createHttpApp(service));
   let closed = false;
   const close = async () => {
@@ -72,7 +72,7 @@ it("SIGTERM closes a real server with idle SSE and releases its data lock", asyn
   await new Promise<void>(resolve => socket.close(() => resolve()));
   const port = address.port;
   const child = spawn(process.execPath, ["--import", "tsx", "src/server/main/index.ts"], {
-    cwd: process.cwd(), env: { ...process.env, APP_PORT: String(port), APP_DATA_DIR: root, APP_CODEX_MODE: "fake" }, stdio: ["ignore", "pipe", "pipe"],
+    cwd: process.cwd(), env: { ...process.env, APP_PORT: String(port), APP_DATA_DIR: root, APP_CODEX_MODE: "mock" }, stdio: ["ignore", "pipe", "pipe"],
   });
   let logs = "";
   child.stderr.on("data", chunk => { logs += String(chunk); });
@@ -117,7 +117,7 @@ it("releases the data lock when the HTTP port is already occupied", async () => 
   const address = socket.address();
   if (!address || typeof address === "string") throw new Error("No TCP port");
   const child = spawn(process.execPath, ["--import", "tsx", "src/server/main/index.ts"], {
-    cwd: process.cwd(), env: { ...process.env, APP_PORT: String(address.port), APP_DATA_DIR: root, APP_CODEX_MODE: "fake" }, stdio: ["ignore", "ignore", "pipe"],
+    cwd: process.cwd(), env: { ...process.env, APP_PORT: String(address.port), APP_DATA_DIR: root, APP_CODEX_MODE: "mock" }, stdio: ["ignore", "ignore", "pipe"],
   });
   try {
     const exit = await within(new Promise<number | null>(resolve => child.once("exit", code => resolve(code))), 5_000);

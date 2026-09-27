@@ -6,7 +6,7 @@ import { afterEach, expect, it } from 'vitest';
 import { unzipSync, strFromU8 } from 'fflate';
 import { createHttpApp } from '../../src/server/http/app.js';
 import { createAppService, type AppService } from '../../src/server/workflow/service.js';
-import { createFakeCodexPort } from '../../src/server/codex/fake-port.js';
+import { createMockCodexPort } from '../../src/server/codex/mock-port.js';
 import { LocalArtifactStore } from '../../src/server/artifacts/local-store.js';
 import { QuickJsCheckRunner } from '../../src/server/checks/quickjs-runner.js';
 import type { TaskSnapshotResponse } from '../../src/shared/api.js';
@@ -29,10 +29,11 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
 });
 
-async function setup(scenario: Parameters<typeof createFakeCodexPort>[0] = 'no_response') {
+// Запускает изолированный HTTP-сервис с заданным mock-сценарием ответов модели.
+async function setup(scenario: Parameters<typeof createMockCodexPort>[0] = 'no_response') {
   const root = await mkdtemp(path.join(tmpdir(), 'loop-qa-http-')); roots.push(root);
   const artifacts = new LocalArtifactStore(root);
-  const service = await createAppService({ dataDir: root, executionMode: 'fake', ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: createFakeCodexPort(scenario) } });
+  const service = await createAppService({ dataDir: root, executionMode: 'mock', ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: createMockCodexPort(scenario) } });
   services.push(service);
   const server = createServer(createHttpApp(service)); servers.push(server);
   await new Promise<void>((resolve, reject) => {
@@ -100,7 +101,7 @@ it('HTTP parser preserves JSON errors, content type, size limit and HEAD respons
   expect(oversized.status).toBe(500);
   expect((await oversized.json() as { code: string }).code).toBe('internal_error');
   const health = await fetch(`${base}/api/health`);
-  expect(await health.json()).toEqual({ ok: true, executionMode: 'fake' });
+  expect(await health.json()).toEqual({ ok: true, executionMode: 'mock' });
   const head = await fetch(`${base}/api/health`, { method: 'HEAD' });
   expect(head.status).toBe(200);
   expect(await head.text()).toBe('');

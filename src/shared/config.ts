@@ -30,8 +30,8 @@ export const AppConfigSchema = z.object({
   host: z.literal("127.0.0.1"),
   port: z.number().int().min(1).max(65535),
   dataDir: z.string().min(1),
-  executionMode: z.enum(["real", "fake"]),
-  fakeScenario: z.enum(["happy", "review_loop", "no_response", "review_once", "slow"]),
+  executionMode: z.enum(["real", "mock"]),
+  mockScenario: z.enum(["happy", "review_loop", "no_response", "review_once", "slow"]),
   models: ModelAssignmentsSchema,
   limits: RuntimeLimitsSchema,
 });
@@ -43,7 +43,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port: Number(env.APP_PORT ?? 4317),
     dataDir: env.APP_DATA_DIR ?? ".local-data",
     executionMode: env.APP_CODEX_MODE ?? "real",
-    fakeScenario: env.APP_FAKE_SCENARIO ?? "happy",
+    mockScenario: env.APP_MOCK_SCENARIO ?? "happy",
     models: {
       author: env.AUTHOR_MODEL ?? DEFAULT_MODELS.author,
       reviewer: env.REVIEWER_MODEL ?? DEFAULT_MODELS.reviewer,

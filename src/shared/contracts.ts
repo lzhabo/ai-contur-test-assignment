@@ -124,7 +124,7 @@ export const TaskStateSchema = z.object({
   schemaVersion: z.literal(1),
   taskId: z.string().min(1),
   taskText: z.string().min(1),
-  executionMode: z.enum(["real", "fake"]),
+  executionMode: z.enum(["real", "mock"]),
   models: z.object({ author: z.string().min(1), reviewer: z.string().min(1), applier: z.string().min(1) }),
   phase: TaskPhaseSchema,
   currentArtifact: ArtifactRefSchema.nullable(),
