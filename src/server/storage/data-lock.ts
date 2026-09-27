@@ -2,15 +2,21 @@ import { lstat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-export interface DataLock { release(): Promise<void> }
+export interface DataLock {
+  release(): Promise<void>;
+}
 
+/** Отклоняет символьную ссылку в пути каталога или файла блокировки. */
 async function rejectSymlink(path: string): Promise<void> {
   try {
     const entry = await lstat(path);
     if (entry.isSymbolicLink()) throw new Error(`Refusing symlink data lock path: ${path}`);
-  } catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
 }
 
+/** Захватывает исключительную SQLite-блокировку каталога до завершения сервиса. */
 export async function acquireDataLock(dataDir: string): Promise<DataLock> {
   await rejectSymlink(dataDir);
   await mkdir(dataDir, { recursive: true });
@@ -25,16 +31,26 @@ export async function acquireDataLock(dataDir: string): Promise<DataLock> {
     // can give two processes ownership at once.
     db.exec("BEGIN EXCLUSIVE");
     db.exec("DELETE FROM owner");
-    db.prepare("INSERT INTO owner (pid, started_at) VALUES (?, ?)").run(process.pid, new Date().toISOString());
+    db.prepare("INSERT INTO owner (pid, started_at) VALUES (?, ?)").run(
+      process.pid,
+      new Date().toISOString(),
+    );
     let released = false;
-    return { release: async () => {
-      if (released) return;
-      released = true;
-      try { db.exec("ROLLBACK"); }
-      finally { db.close(); }
-    } };
+    return {
+      release: /* Освобождает блокировку единожды и закрывает SQLite-соединение. */ async () => {
+        if (released) return;
+        released = true;
+        try {
+          db.exec("ROLLBACK");
+        } finally {
+          db.close();
+        }
+      },
+    };
   } catch (error) {
     db.close();
-    throw new Error(`Data directory is already owned or its lock is unavailable: ${path}`, { cause: error });
+    throw new Error(`Data directory is already owned or its lock is unavailable: ${path}`, {
+      cause: error,
+    });
   }
 }

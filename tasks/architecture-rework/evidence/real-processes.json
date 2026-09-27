@@ -1,0 +1,185 @@
+{
+  "commit": "63a5a8752717dfe63e2aeaece15cc936341e384d",
+  "realCallsLimit": 2,
+  "scenarios": [
+    {
+      "scenario": "stop",
+      "taskId": "ce8803af-135a-440e-a12d-34f116b631fa",
+      "backendPid": 43581,
+      "observation": {
+        "at": "2026-09-27T18:41:58.923Z",
+        "source": "codex-cli",
+        "name": "turn_started",
+        "stage": "response_started",
+        "detail": null
+      },
+      "ownProcesses": [
+        {
+          "codexPid": 43584,
+          "group": [
+            {
+              "pid": 43584,
+              "parent": 43581,
+              "group": 43584
+            }
+          ]
+        }
+      ],
+      "before": {
+        "phase": "author",
+        "usedModelCalls": 1,
+        "activeAttempt": {
+          "attemptId": "7d77fc50-b7a9-4416-a1cf-3320c140142a",
+          "role": "author",
+          "modelId": "gpt-6-sol",
+          "startedAt": "2026-09-27T18:41:56.360Z",
+          "lastObservedAt": "2026-09-27T18:41:58.923Z",
+          "lastObservedStage": "author: turn_started"
+        },
+        "resultPath": null,
+        "lastEventSequence": 4,
+        "actions": {
+          "canStop": true,
+          "canDecide": false,
+          "canResume": false,
+          "resumeRequiresExplicitRetry": false
+        }
+      },
+      "after": {
+        "phase": "stopped",
+        "usedModelCalls": 1,
+        "activeAttempt": null,
+        "resultPath": null,
+        "lastEventSequence": 6,
+        "actions": {
+          "canStop": false,
+          "canDecide": false,
+          "canResume": false,
+          "resumeRequiresExplicitRetry": false
+        }
+      },
+      "processGoneAfterStop": true,
+      "callAttempts": [
+        {
+          "backendPid": 43581,
+          "role": "author",
+          "attemptId": "7d77fc50-b7a9-4416-a1cf-3320c140142a",
+          "taskId": "ce8803af-135a-440e-a12d-34f116b631fa",
+          "mode": "start"
+        }
+      ],
+      "status": "PASS"
+    },
+    {
+      "scenario": "crash",
+      "taskId": "96da0092-1f6b-4420-b9c6-0ae3d98673fc",
+      "backendPid": 43616,
+      "observation": {
+        "at": "2026-09-27T18:42:05.835Z",
+        "source": "codex-cli",
+        "name": "turn_started",
+        "stage": "response_started",
+        "detail": null
+      },
+      "ownProcesses": [
+        {
+          "codexPid": 43618,
+          "group": [
+            {
+              "pid": 43618,
+              "parent": 43616,
+              "group": 43618
+            }
+          ]
+        }
+      ],
+      "before": {
+        "phase": "author",
+        "usedModelCalls": 1,
+        "activeAttempt": {
+          "attemptId": "ae24a618-245c-40ed-ad15-1684d108277a",
+          "role": "author",
+          "modelId": "gpt-6-sol",
+          "startedAt": "2026-09-27T18:42:04.534Z",
+          "lastObservedAt": "2026-09-27T18:42:05.835Z",
+          "lastObservedStage": "author: turn_started"
+        },
+        "resultPath": null,
+        "lastEventSequence": 4,
+        "actions": {
+          "canStop": true,
+          "canDecide": false,
+          "canResume": false,
+          "resumeRequiresExplicitRetry": false
+        }
+      },
+      "crashExit": {
+        "code": null,
+        "signal": "SIGKILL"
+      },
+      "after": {
+        "phase": "unknown_outcome",
+        "usedModelCalls": 1,
+        "activeAttempt": null,
+        "resultPath": null,
+        "lastEventSequence": 5,
+        "actions": {
+          "canStop": true,
+          "canDecide": false,
+          "canResume": true,
+          "resumeRequiresExplicitRetry": true
+        }
+      },
+      "restoreBackendPid": 43647,
+      "callAttempts": [
+        {
+          "backendPid": 43616,
+          "role": "author",
+          "attemptId": "ae24a618-245c-40ed-ad15-1684d108277a",
+          "taskId": "96da0092-1f6b-4420-b9c6-0ae3d98673fc",
+          "mode": "start"
+        }
+      ],
+      "status": "PASS"
+    }
+  ],
+  "cleanup": [
+    {
+      "scenario": "stop",
+      "codexPid": 43584,
+      "groupMembersBeforeCleanup": [],
+      "remainingMembers": 0
+    },
+    {
+      "scenario": "crash",
+      "codexPid": 43618,
+      "groupMembersBeforeCleanup": [
+        {
+          "pid": 43618,
+          "parent": 1,
+          "group": 43618
+        }
+      ],
+      "remainingMembers": 0
+    },
+    {
+      "scenario": "crash",
+      "codexPid": 43618,
+      "groupMembersBeforeCleanup": [],
+      "remainingMembers": 0
+    },
+    {
+      "scenario": "final",
+      "codexPid": 43584,
+      "groupMembersBeforeCleanup": [],
+      "remainingMembers": 0
+    },
+    {
+      "scenario": "final",
+      "codexPid": 43618,
+      "groupMembersBeforeCleanup": [],
+      "remainingMembers": 0
+    }
+  ],
+  "status": "PASS"
+}

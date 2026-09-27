@@ -1,0 +1,16 @@
+[WebServer] (node:43196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+
+Running 1 test using 1 worker
+
+(node:43200) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] {"e2eModelCall":"author","executionMode":"mock"}
+[WebServer] (node:43196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+[WebServer] (Use `node --trace-warnings ...` to show where the warning was created)
+[WebServer] {"e2eModelCall":"reviewer","executionMode":"mock"}
+[WebServer] {"e2eModelCall":"applier","executionMode":"mock"}
+  ✓  1 tests/e2e/product-flow.spec.ts:5:1 › A-09/A-10: изменённый пример проходит подтверждение после перезагрузки и скачивается без изменений (1.8s)
+[WebServer] {"e2eClosed":true,"executionMode":"mock","roles":["author","reviewer","applier"]}
+
+  1 passed (3.7s)

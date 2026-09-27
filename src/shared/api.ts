@@ -1,8 +1,16 @@
 import { z } from "zod";
 
 export const TaskPhaseSchema = z.enum([
-  "preparing", "author", "checking", "review", "awaiting_approval",
-  "applying", "completed", "stopped", "error", "unknown_outcome",
+  "preparing",
+  "author",
+  "checking",
+  "review",
+  "awaiting_approval",
+  "applying",
+  "completed",
+  "stopped",
+  "error",
+  "unknown_outcome",
 ]);
 export type TaskPhase = z.infer<typeof TaskPhaseSchema>;
 
@@ -26,10 +34,20 @@ export const TaskEventSchema = z.object({
   eventId: z.string().min(1),
   at: z.iso.datetime(),
   type: z.enum([
-    "task_created", "phase_changed", "attempt_started", "attempt_observed",
-    "attempt_finished", "message", "version_created", "checks_finished",
-    "review_finished", "decision_recorded", "publication_finished", "task_stopped",
-    "task_failed", "unknown_outcome",
+    "task_created",
+    "phase_changed",
+    "attempt_started",
+    "attempt_observed",
+    "attempt_finished",
+    "message",
+    "version_created",
+    "checks_finished",
+    "review_finished",
+    "decision_recorded",
+    "publication_finished",
+    "task_stopped",
+    "task_failed",
+    "unknown_outcome",
   ]),
   from: AgentRoleSchema.or(z.literal("system")).or(z.literal("user")).nullable(),
   to: AgentRoleSchema.or(z.literal("system")).or(z.literal("user")).nullable(),
@@ -71,13 +89,28 @@ export type CheckSummary = z.infer<typeof CheckSummarySchema>;
 
 export const TaskViewStateSchema = z.object({
   taskText: z.string(),
-  executionMode: z.enum(["real", "fake"]),
+  executionMode: z.enum(["real", "mock"]),
   models: z.object({ author: z.string(), reviewer: z.string(), applier: z.string() }),
   currentVersionId: z.string().nullable(),
   currentManifestHash: z.string().nullable(),
-  latestReview: z.object({ verdict: z.enum(["approved", "changes_requested"]), findings: z.array(z.string()), versionId: z.string() }).nullable(),
+  latestReview: z
+    .object({
+      verdict: z.enum(["approved", "changes_requested"]),
+      findings: z.array(z.string()),
+      versionId: z.string(),
+    })
+    .nullable(),
   latestChecks: CheckSummarySchema.nullable(),
-  activeAttempt: z.object({ attemptId: z.string(), role: AgentRoleSchema, modelId: z.string(), startedAt: z.iso.datetime(), lastObservedAt: z.iso.datetime().nullable(), lastObservedStage: z.string().nullable() }).nullable(),
+  activeAttempt: z
+    .object({
+      attemptId: z.string(),
+      role: AgentRoleSchema,
+      modelId: z.string(),
+      startedAt: z.iso.datetime(),
+      lastObservedAt: z.iso.datetime().nullable(),
+      lastObservedStage: z.string().nullable(),
+    })
+    .nullable(),
   usedModelCalls: z.number().int().nonnegative(),
   maxModelCalls: z.number().int().positive(),
   createdVersions: z.number().int().nonnegative(),
@@ -86,7 +119,10 @@ export const TaskViewStateSchema = z.object({
 });
 export type TaskViewState = z.infer<typeof TaskViewStateSchema>;
 
-export const TaskListResponseSchema = z.object({ tasks: z.array(TaskSummarySchema), activeTaskId: z.string().nullable() });
+export const TaskListResponseSchema = z.object({
+  tasks: z.array(TaskSummarySchema),
+  activeTaskId: z.string().nullable(),
+});
 export type TaskListResponse = z.infer<typeof TaskListResponseSchema>;
 
 export const TaskSnapshotResponseSchema = z.object({

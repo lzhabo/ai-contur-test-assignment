@@ -17,22 +17,29 @@ const State = Annotation.Root({
 });
 
 const graph = new StateGraph(State)
-  .addNode("prepare", (state) => ({
-    phase: "reserved",
-    reservedCalls: state.reservedCalls + 1,
-    attemptId: "attempt-e0-1",
-  }))
+  .addNode(
+    "prepare",
+    /* Сохраняет номер попытки и расход бюджета перед внешним вызовом. */ (state) => ({
+      phase: "reserved",
+      reservedCalls: state.reservedCalls + 1,
+      attemptId: "attempt-e0-1",
+    }),
+  )
   .addNode("author", async (state) => {
-    // A fresh SQLite connection must see the reservation before the side effect.
+    // Через новое соединение проверяет сохранение резервирования до записи вызова автора в counter.
     const committed = await SqliteSaver.fromConnString(databasePath).getTuple(config);
+
     assert.equal(committed?.checkpoint.channel_values.phase, "reserved");
     assert.equal(committed?.checkpoint.channel_values.reservedCalls, 1);
     assert.equal(committed?.checkpoint.channel_values.attemptId, "attempt-e0-1");
     assert.equal(state.reservedCalls, 1);
+
     appendFileSync(counterPath, "author\n");
     return { authorRuns: state.authorRuns + 1, phase: "awaiting_approval" };
   })
   .addNode("approval", () => {
+    // Приостанавливает граф до решения и записывает его при возобновлении.
+
     const decision = interrupt({ version: "v1", action: "approve" });
     return { decision: String(decision), phase: "complete" };
   })
@@ -42,12 +49,26 @@ const graph = new StateGraph(State)
   .addEdge("approval", END)
   .compile({ checkpointer: SqliteSaver.fromConnString(databasePath) });
 
-const config = { configurable: { thread_id: "e0-cross-process" }, durability: "sync" as const };
-const count = () => readFileSync(counterPath, "utf8").trim().split("\n").length;
+const config = {
+  configurable: { thread_id: "e0-cross-process" },
+  durability: "sync" as const,
+};
+const count = /* Подсчитывает сохранённые вызовы для обнаружения лишнего повтора. */ () =>
+  readFileSync(counterPath, "utf8").trim().split("\n").length;
 
 if (stage === "start") {
-  await graph.invoke({ authorRuns: 0, reservedCalls: 0, attemptId: "", phase: "new", decision: "" }, config);
+  await graph.invoke(
+    {
+      authorRuns: 0,
+      reservedCalls: 0,
+      attemptId: "",
+      phase: "new",
+      decision: "",
+    },
+    config,
+  );
   const snapshot = await graph.getState(config);
+
   assert.deepEqual(snapshot.next, ["approval"]);
   assert.equal(snapshot.values.authorRuns, 1);
   assert.equal(snapshot.values.reservedCalls, 1);
@@ -55,15 +76,26 @@ if (stage === "start") {
   assert.equal(snapshot.values.phase, "awaiting_approval");
   assert.equal(count(), 1);
   assert.ok(statSync(databasePath).size > 0);
-  console.log(JSON.stringify({ stage, next: snapshot.next, state: snapshot.values, authorCalls: count() }));
+
+  console.log(
+    JSON.stringify({
+      stage,
+      next: snapshot.next,
+      state: snapshot.values,
+      authorCalls: count(),
+    }),
+  );
 } else {
   const before = await graph.getState(config);
+
   assert.deepEqual(before.next, ["approval"]);
   assert.equal(before.values.authorRuns, 1);
   assert.equal(before.values.reservedCalls, 1);
   assert.equal(before.values.attemptId, "attempt-e0-1");
+
   await graph.invoke(new Command({ resume: "approved" }), config);
   const after = await graph.getState(config);
+
   assert.deepEqual(after.next, []);
   assert.equal(after.values.decision, "approved");
   assert.equal(after.values.phase, "complete");
@@ -71,5 +103,13 @@ if (stage === "start") {
   assert.equal(after.values.reservedCalls, 1);
   assert.equal(after.values.attemptId, "attempt-e0-1");
   assert.equal(count(), 1, "author must not run again after resume");
-  console.log(JSON.stringify({ stage, next: after.next, state: after.values, authorCalls: count() }));
+
+  console.log(
+    JSON.stringify({
+      stage,
+      next: after.next,
+      state: after.values,
+      authorCalls: count(),
+    }),
+  );
 }
