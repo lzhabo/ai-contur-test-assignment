@@ -1,0 +1,12 @@
+dist/
+node_modules/
+.local-data/
+tests/fixtures/
+**/*.jsonl
+**/*.stderr
+**/*.stdout
+tests/unit/codex/E0*
+tests/unit/codex/E2*
+tests/unit/codex/e0-*
+tests/unit/codex/e2-*
+tests/unit/workflow/e0-evidence.md

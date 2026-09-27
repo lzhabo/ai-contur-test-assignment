@@ -5,9 +5,9 @@
 ## Mock-сценарии
 
 ```sh
-npm run typecheck
-npm test
-npm run build
+npm run check
+npm run format:check
+npm run test:e2e
 APP_CODEX_MODE=mock APP_MOCK_SCENARIO=review_once APP_DATA_DIR=.local-data/mock-review npm start
 ```
 
@@ -21,6 +21,8 @@ APP_CODEX_MODE=real APP_DATA_DIR=.local-data/real-run npm start
 ```
 
 Приложение использует существующий вход Codex через ChatGPT. Эта папка данных отделена от mock-прогона.
+
+Браузерный сценарий с настоящими моделями запускается командой `QA_REAL_CODEX=1 npm run test:e2e`. Полный набор проверок: `npm run check:full`. Реальные прогоны расходуют лимиты текущей подписки; при недоступности доступа прогон отмечается как заблокированный, без автоматической подмены ответов.
 
 ## Смешанная проверка исправления
 

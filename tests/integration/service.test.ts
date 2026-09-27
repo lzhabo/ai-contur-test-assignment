@@ -1,109 +1,210 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { afterEach, expect, it } from 'vitest';
-import { createAppService, type AppService } from '../../src/server/workflow/service.js';
-import { createMockCodexPort } from '../../src/server/codex/mock-port.js';
-import { LocalArtifactStore } from '../../src/server/artifacts/local-store.js';
-import { QuickJsCheckRunner } from '../../src/server/checks/quickjs-runner.js';
-import { DEFAULT_LIMITS, type DecisionRequest, type TaskSnapshotResponse, type CodexRunRequest } from '../../src/shared/index.js';
-const roots: string[] = [];
-const services: AppService[] = [];
-afterEach(async () => {
-  await Promise.allSettled(services.splice(0).map(service => service.close()));
-  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
-});
-// Создаёт изолированный сервис с mock-ответами и записывает переданные модели запросы.
-async function setup(scenario: Parameters<typeof createMockCodexPort>[0] = 'happy') {
-  const root = await mkdtemp(path.join(tmpdir(), 'loop-qa-service-')); roots.push(root);
-  const artifacts = new LocalArtifactStore(root);
-  const mock = createMockCodexPort(scenario);
-  const calls: CodexRunRequest[] = [];
-  const options = { dataDir: root, executionMode: 'mock' as const,
-    limits: { ...DEFAULT_LIMITS, modelTimeoutMs: scenario === 'no_response' ? 50 : 10000 },
-    ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: { run: (request: CodexRunRequest, hooks: Parameters<typeof mock.run>[1]) => { calls.push(request); return mock.run(request, hooks); } } } };
-  const service = await createAppService(options); services.push(service);
-  return { root, service, options, calls };
-}
-async function until(service: AppService, id: string, matches: (value: TaskSnapshotResponse) => boolean) {
-  const end = Date.now() + 10000;
-  let last: TaskSnapshotResponse | undefined;
-  while (Date.now() < end) {
-    last = await service.getTask(id);
-    if (matches(last)) return last;
-    await new Promise(resolve => setTimeout(resolve, 10));
-  }
-  throw new Error(`Task did not reach expected condition: ${JSON.stringify(last)}`);
-}
+import { writeFile } from "node:fs/promises";
+import path from "node:path";
+import { expect, it } from "vitest";
+import { createAppService } from "../../src/server/tasks/service.js";
+import type { DecisionRequest, TaskSnapshotResponse } from "../../src/shared/api.js";
+import { setupService as setup, waitForTask as until, services } from "../support/service.js";
+
+// Формирует подтверждение точной версии и хеша, показанных пользователю.
 function decision(value: TaskSnapshotResponse): DecisionRequest {
-  return { decisionId: 'qa-approve', decision: 'approve', versionId: value.state.currentVersionId!, manifestHash: value.state.currentManifestHash! };
+  return {
+    decisionId: "qa-approve",
+    decision: "approve",
+    versionId: value.state.currentVersionId!,
+    manifestHash: value.state.currentManifestHash!,
+  };
 }
-it('A-08: stale approval is rejected and concurrent duplicate approval publishes once', async () => {
+it("A-08: устаревший хеш подтверждения отклоняется без публикации", async () => {
+  // Проверяет сценарий: A-08: устаревший хеш подтверждения отклоняется без публикации.
+
   const f = await setup();
-  const { taskId } = await f.service.createTask({ text: 'mergeIntervals' }, 'qa-create');
-  const paused = await until(f.service, taskId, value => value.actions.canDecide);
-  const approval = decision(paused);
-  await expect(f.service.decide(taskId, { ...approval, manifestHash: '0'.repeat(64) })).rejects.toMatchObject({ statusCode: 409 });
-  await Promise.all([f.service.decide(taskId, approval), f.service.decide(taskId, approval)]);
-  const finished = await until(f.service, taskId, value => value.task.phase === 'completed');
-  expect(f.calls.filter(call => call.role === 'applier')).toHaveLength(1);
-  expect((await f.service.decide(taskId, approval)).state.currentManifestHash).toBe(finished.state.currentManifestHash);
-  expect(f.calls.filter(call => call.role === 'applier')).toHaveLength(1);
+  const { taskId } = await f.service.createTask({ text: "mergeIntervals" }, "qa-create");
+  const paused = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.actions.canDecide,
+  );
+  const approval = { ...decision(paused), manifestHash: "0".repeat(64) };
+
+  const approveStaleVersion =
+    /* Отправляет решение, которое должно быть отклонено по проверяемому условию. */ () =>
+      f.service.decide(taskId, approval);
+
+  await expect(approveStaleVersion()).rejects.toMatchObject({
+    code: "stale_version",
+  });
+  expect(
+    f.calls.filter(/* Отбирает записи проверяемого вида. */ (call) => call.role === "applier"),
+  ).toHaveLength(0);
 }, 15000);
 
-it('A-09: concurrent duplicate task submission is idempotent and permits only one task', async () => {
-  const f = await setup('slow');
-  const results = await Promise.all([f.service.createTask({ text: 'mergeIntervals' }, 'same-key'), f.service.createTask({ text: 'mergeIntervals' }, 'same-key')]);
+it("A-08: одновременное повторное подтверждение публикует ровно один раз", async () => {
+  // Проверяет сценарий: A-08: одновременное повторное подтверждение публикует ровно один раз.
+
+  const f = await setup();
+  const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
+  const paused = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.actions.canDecide,
+  );
+  const approval = decision(paused);
+
+  await Promise.all([f.service.decide(taskId, approval), f.service.decide(taskId, approval)]);
+  const finished = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.task.phase === "completed",
+  );
+
+  expect(finished.state.resultPath).not.toBeNull();
+  expect(
+    f.calls.filter(/* Отбирает записи проверяемого вида. */ (call) => call.role === "applier"),
+  ).toHaveLength(1);
+}, 15000);
+
+it("A-08: повтор подтверждения готовой задачи сохраняет результат без нового вызова", async () => {
+  // Проверяет сценарий: A-08: повтор подтверждения готовой задачи сохраняет результат без нового вызова.
+
+  const f = await setup();
+  const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
+  const paused = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.actions.canDecide,
+  );
+  const approval = decision(paused);
+  await f.service.decide(taskId, approval);
+  const finished = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.task.phase === "completed",
+  );
+
+  const repeated = await f.service.decide(taskId, approval);
+
+  expect(repeated.state.currentManifestHash).toBe(finished.state.currentManifestHash);
+  expect(
+    f.calls.filter(/* Отбирает записи проверяемого вида. */ (call) => call.role === "applier"),
+  ).toHaveLength(1);
+}, 15000);
+
+it("A-09: одновременные создания с одним ключом возвращают одну задачу", async () => {
+  // Проверяет сценарий: A-09: одновременные создания с одним ключом возвращают одну задачу.
+
+  const f = await setup("slow");
+  const results = await Promise.all([
+    f.service.createTask({ text: "mergeIntervals" }, "same-key"),
+    f.service.createTask({ text: "mergeIntervals" }, "same-key"),
+  ]);
+
   expect(results[0]).toEqual(results[1]);
   expect((await f.service.listTasks()).tasks).toHaveLength(1);
+
   await f.service.stop(results[0]!.taskId);
 }, 15000);
 
-it('A-09: distinct concurrent creates cannot run two active tasks', async () => {
-  const f = await setup('slow');
-  const results = await Promise.allSettled([f.service.createTask({ text: 'mergeIntervals' }, 'one'), f.service.createTask({ text: 'catify' }, 'two')]);
-  expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+it("A-09: разные одновременные запросы не запускают две активные задачи", async () => {
+  // Проверяет сценарий: A-09: разные одновременные запросы не запускают две активные задачи.
+
+  const f = await setup("slow");
+  const results = await Promise.allSettled([
+    f.service.createTask({ text: "mergeIntervals" }, "one"),
+    f.service.createTask({ text: "catify" }, "two"),
+  ]);
+
+  expect(
+    results.filter(
+      /* Отбирает записи проверяемого вида. */ (result) => result.status === "fulfilled",
+    ),
+  ).toHaveLength(1);
   expect((await f.service.listTasks()).tasks).toHaveLength(1);
 }, 15000);
 
-it('A-03/A-04: unknown outcome survives service restart without retry or reset budget', async () => {
-  const f = await setup('no_response');
-  const { taskId } = await f.service.createTask({ text: 'mergeIntervals' });
-  const before = await until(f.service, taskId, value => value.task.phase === 'unknown_outcome');
-  await f.service.close(); services.splice(services.indexOf(f.service), 1);
-  const restarted = await createAppService(f.options); services.push(restarted);
+it("A-03/A-04: неизвестный исход сохраняется после перезапуска без скрытого повтора", async () => {
+  // Проверяет сценарий: A-03/A-04: неизвестный исход сохраняется после перезапуска без скрытого повтора.
+
+  const f = await setup("no_response");
+  const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
+  const before = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.task.phase === "unknown_outcome",
+  );
+  await f.service.close();
+  services.splice(services.indexOf(f.service), 1);
+  const restarted = await createAppService(f.options);
+  services.push(restarted);
   const after = await restarted.getTask(taskId);
-  expect(after.task.phase).toBe('unknown_outcome');
+
+  expect(after.task.phase).toBe("unknown_outcome");
   expect(after.state.usedModelCalls).toBe(before.state.usedModelCalls);
   expect(f.calls).toHaveLength(1);
   expect(after.actions.resumeRequiresExplicitRetry).toBe(true);
-  await expect(restarted.resume(taskId, { mode: 'continue' })).rejects.toMatchObject({ statusCode: 409 });
-  await restarted.resume(taskId, { mode: 'retry_unknown' });
-  await until(restarted, taskId, value => value.task.phase === 'unknown_outcome' && value.state.usedModelCalls === 2);
+  await expect(restarted.resume(taskId, { mode: "continue" })).rejects.toMatchObject({
+    code: "resume_not_allowed",
+  });
+
+  await restarted.resume(taskId, { mode: "retry_unknown" });
+  await until(
+    restarted,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) =>
+      value.task.phase === "unknown_outcome" && value.state.usedModelCalls === 2,
+  );
+
   expect(f.calls).toHaveLength(2);
 }, 15000);
 
+it("A-10: перезапуск выявляет изменённый результат и не показывает его готовым", async () => {
+  // Проверяет сценарий: A-10: перезапуск выявляет изменённый результат и не показывает его готовым.
 
-it('A-10: service restart detects a tampered completed artifact before presenting it as ready', async () => {
   const f = await setup();
-  const { taskId } = await f.service.createTask({ text: 'mergeIntervals' });
-  const paused = await until(f.service, taskId, value => value.actions.canDecide);
+  const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
+  const paused = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.actions.canDecide,
+  );
   await f.service.decide(taskId, decision(paused));
-  const completed = await until(f.service, taskId, value => value.task.phase === 'completed');
-  await f.service.close(); services.splice(services.indexOf(f.service), 1);
-  await writeFile(path.join(completed.state.resultPath!, 'solution.ts'), 'changed after publication');
-  const restarted = await createAppService(f.options); services.push(restarted);
+  const completed = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.task.phase === "completed",
+  );
+  await f.service.close();
+  services.splice(services.indexOf(f.service), 1);
+  await writeFile(
+    path.join(completed.state.resultPath!, "solution.ts"),
+    "changed after publication",
+  );
+  const restarted = await createAppService(f.options);
+  services.push(restarted);
   const visible = await restarted.getTask(taskId);
-  expect(visible.task.phase).not.toBe('completed');
+
+  expect(visible.task.phase).not.toBe("completed");
   expect(visible.task.stopReason).toBeTruthy();
 }, 15000);
 
-it('A-08: concurrent stop and approval cannot publish after stop wins', async () => {
-  const f = await setup('slow');
-  const { taskId } = await f.service.createTask({ text: 'mergeIntervals' });
-  const paused = await until(f.service, taskId, value => value.actions.canDecide);
+it("A-08: победившая остановка запрещает публикацию при одновременном подтверждении", async () => {
+  // Проверяет сценарий: A-08: победившая остановка запрещает публикацию при одновременном подтверждении.
+
+  const f = await setup("slow");
+  const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
+  const paused = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.actions.canDecide,
+  );
   await Promise.allSettled([f.service.stop(taskId), f.service.decide(taskId, decision(paused))]);
-  const ended = await until(f.service, taskId, value => value.task.phase === 'stopped');
+  const ended = await until(
+    f.service,
+    taskId,
+    /* Проверяет достижение нужного состояния. */ (value) => value.task.phase === "stopped",
+  );
+
   expect(ended.state.resultPath).toBeNull();
-  await expect(f.service.getResultZip(taskId)).rejects.toThrow();
+  await expect(f.service.getResultZip(taskId)).rejects.toMatchObject({
+    code: "result_unavailable",
+  });
 }, 15000);
