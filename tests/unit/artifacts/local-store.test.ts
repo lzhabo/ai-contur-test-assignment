@@ -33,6 +33,7 @@ describe("неизменяемые версии файлов", () => {
   // Объединяет проверки: неизменяемые версии файлов.
 
   it("публикует подтверждённые байты однократно и возвращает совпадающий ZIP", async () => {
+    // Публикует точную версию дважды, сверяет архив и запускает экспортированные тесты.
     const { root, artifacts } = await store();
     const ref = await artifacts.writeVersion({ taskId: "task_1", candidate });
     await artifacts.verifyVersion(ref);

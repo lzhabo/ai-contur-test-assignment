@@ -8,84 +8,72 @@ import {
 import { ModelAssignmentsSchema } from "../../../src/server/config.js";
 
 describe("контракты внешних данных", () => {
-  // Объединяет проверки: контракты внешних данных.
+  // Объединяет проверки внешнего ввода и данных, передаваемых между модулями.
 
   it("отклоняет пустую задачу и принимает непустой текст", () => {
-    expect(CreateTaskRequestSchema.safeParse({ text: "   " }).success).toBe(false);
-    expect(CreateTaskRequestSchema.parse({ text: "  merge intervals  " }).text).toBe(
-      "merge intervals",
-    );
+    // Проверяет запрет пустого задания и удаление пробелов вокруг непустого текста.
+    const emptyInput = { text: "   " };
+    const nonEmptyInput = { text: "  merge intervals  " };
+
+    const emptyResult = CreateTaskRequestSchema.safeParse(emptyInput);
+    const nonEmptyResult = CreateTaskRequestSchema.parse(nonEmptyInput);
+
+    expect(emptyResult.success).toBe(false);
+    expect(nonEmptyResult.text).toBe("merge intervals");
   });
 
   it("требует разные модели автора и ревьюера", () => {
-    // Проверяет сценарий: требует разные модели автора и ревьюера.
+    // Проверяет, что одинаковая модель автора и ревьюера не проходит схему настроек.
+    const input = { author: "same", reviewer: "same", applier: "same" };
 
-    expect(
-      ModelAssignmentsSchema.safeParse({
-        author: "same",
-        reviewer: "same",
-        applier: "same",
-      }).success,
-    ).toBe(false);
+    const result = ModelAssignmentsSchema.safeParse(input);
+
+    expect(result.success).toBe(false);
   });
 
   it("связывает решение с конкретной версией и хешем SHA-256", () => {
-    // Проверяет сценарий: связывает решение с конкретной версией и хешем SHA-256.
+    // Сравнивает решение с неверным хешем и решение с допустимым SHA-256 той же версии.
+    const invalidInput = {
+      decisionId: "d1",
+      decision: "approve",
+      versionId: "v1",
+      manifestHash: "bad",
+    };
+    const validInput = { ...invalidInput, manifestHash: "a".repeat(64) };
 
-    expect(
-      DecisionRequestSchema.safeParse({
-        decisionId: "d1",
-        decision: "approve",
-        versionId: "v1",
-        manifestHash: "bad",
-      }).success,
-    ).toBe(false);
-    expect(
-      DecisionRequestSchema.safeParse({
-        decisionId: "d1",
-        decision: "approve",
-        versionId: "v1",
-        manifestHash: "a".repeat(64),
-      }).success,
-    ).toBe(true);
+    const invalidResult = DecisionRequestSchema.safeParse(invalidInput);
+    const validResult = DecisionRequestSchema.safeParse(validInput);
+
+    expect(invalidResult.success).toBe(false);
+    expect(validResult.success).toBe(true);
   });
 
   it("разрешает только два предусмотренных имени файлов", () => {
-    // Проверяет сценарий: разрешает только два предусмотренных имени файлов.
-
-    const ref = {
+    // Проверяет допустимую пару файлов и отклоняет путь, выходящий из каталога версии.
+    const validInput = {
       taskId: "t1",
       versionId: "v1",
       manifestHash: "a".repeat(64),
       files: [
-        {
-          artifactId: "f1",
-          path: "solution.ts",
-          sha256: "b".repeat(64),
-          bytes: 10,
-        },
-        {
-          artifactId: "f2",
-          path: "solution.test.ts",
-          sha256: "c".repeat(64),
-          bytes: 20,
-        },
+        { artifactId: "f1", path: "solution.ts", sha256: "b".repeat(64), bytes: 10 },
+        { artifactId: "f2", path: "solution.test.ts", sha256: "c".repeat(64), bytes: 20 },
       ],
     };
+    const invalidInput = {
+      ...validInput,
+      files: [{ ...validInput.files[0], path: "../outside.ts" }, validInput.files[1]],
+    };
 
-    expect(ArtifactRefSchema.safeParse(ref).success).toBe(true);
-    expect(
-      ArtifactRefSchema.safeParse({
-        ...ref,
-        files: [{ ...ref.files[0], path: "../outside.ts" }, ref.files[1]],
-      }).success,
-    ).toBe(false);
+    const validResult = ArtifactRefSchema.safeParse(validInput);
+    const invalidResult = ArtifactRefSchema.safeParse(invalidInput);
+
+    expect(validResult.success).toBe(true);
+    expect(invalidResult.success).toBe(false);
   });
 
   it("требует номер события и сведения о его происхождении", () => {
-    // Проверяет сценарий: требует номер события и сведения о его происхождении.
-
-    const event = {
+    // Принимает полное событие с положительным курсором и отклоняет нулевой курсор.
+    const validInput = {
       taskId: "t1",
       sequence: 1,
       eventId: "e1",
@@ -98,8 +86,12 @@ describe("контракты внешних данных", () => {
       artifactVersionId: "v1",
       source: "codex:event",
     };
+    const invalidInput = { ...validInput, sequence: 0 };
 
-    expect(TaskEventSchema.safeParse(event).success).toBe(true);
-    expect(TaskEventSchema.safeParse({ ...event, sequence: 0 }).success).toBe(false);
+    const validResult = TaskEventSchema.safeParse(validInput);
+    const invalidResult = TaskEventSchema.safeParse(invalidInput);
+
+    expect(validResult.success).toBe(true);
+    expect(invalidResult.success).toBe(false);
   });
 });

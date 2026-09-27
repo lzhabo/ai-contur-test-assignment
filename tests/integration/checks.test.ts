@@ -11,7 +11,7 @@ import {
 } from "../../src/server/tasks/types.js";
 const roots: string[] = [];
 afterEach(async () => {
-  // Освобождает процессы и ресурсы сценария, затем удаляет временные данные.
+  // Удаляет временные каталоги проверенных версий.
   await Promise.all(
     roots
       .splice(0)
@@ -56,7 +56,8 @@ it("независимые граничные случаи находят оши
         weak.independentFailureCases.includes(item.name),
     )
     .map(
-      /* Извлекает поле, сохраняя порядок записей. */ (item: unknown) => TestCaseSchema.parse(item),
+      /* Проверяет весь граничный тестовый случай по схеме. */ (item: unknown) =>
+        TestCaseSchema.parse(item),
     );
   const independent = await run({ ...candidate, cases: independentCases });
 

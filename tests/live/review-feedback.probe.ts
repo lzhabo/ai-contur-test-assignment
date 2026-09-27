@@ -37,7 +37,8 @@ const boundaryCases = fixture.cases
       ["unsorted-disjoint", "overlap", "touching"].includes(testCase.name),
   )
   .map(
-    /* Извлекает поле, сохраняя порядок записей. */ (testCase) => TestCaseSchema.parse(testCase),
+    /* Проверяет весь независимый тестовый случай по схеме. */ (testCase) =>
+      TestCaseSchema.parse(testCase),
   );
 // Вычисляет хеш исходного кода, чтобы отчёт однозначно указывал проверенную версию.
 const sha256 = /* Вычисляет SHA-256 исходника для отчёта о происхождении версии. */ (

@@ -26,7 +26,7 @@ const graph = new StateGraph(State)
     }),
   )
   .addNode("author", async (state) => {
-    // A fresh SQLite connection must see the reservation before the side effect.
+    // Через новое соединение проверяет сохранение резервирования до записи вызова автора в counter.
     const committed = await SqliteSaver.fromConnString(databasePath).getTuple(config);
 
     assert.equal(committed?.checkpoint.channel_values.phase, "reserved");

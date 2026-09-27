@@ -40,6 +40,7 @@ describe("изолированное выполнение TypeScript", () => {
   // Объединяет проверки: изолированное выполнение TypeScript.
 
   it("проверяет типы и сравнивает результаты JSON", async () => {
+    // Выполняет корректную функцию сложения и проверяет успешную компиляцию и сравнение результата.
     const result = await run("export function add(a: number, b: number): number { return a + b; }");
 
     expect(result.compilation.status).toBe("passed");
@@ -96,6 +97,7 @@ describe("изолированное выполнение TypeScript", () => {
         cases: [{ name: "sort", args: [[3, 1, 2]], expected: [1, 2, 3] }],
       },
     });
+
     const result = await new QuickJsCheckRunner(store).run(ref, {
       signal: new AbortController().signal,
       timeoutMs: 2000,

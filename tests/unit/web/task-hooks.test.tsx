@@ -15,8 +15,6 @@ const clients: QueryClient[] = [];
 
 // Размонтирует хуки, закрывает кеши и восстанавливает API после каждого сценария.
 afterEach(() => {
-  // Освобождает процессы и ресурсы сценария, затем удаляет временные данные.
-
   cleanup();
   for (const client of clients) client.clear();
   clients.length = 0;

@@ -103,7 +103,8 @@ it.each(["mergeIntervals", "catify", "shortestPath"])(
     const paused = await waitFor(
       f.service,
       taskId,
-      /* Дожидается ожидаемого обновления React. */ (value) => value.actions.canDecide,
+      /* Проверяет, что исправленная версия доступна для решения человека. */ (value) =>
+        value.actions.canDecide,
     );
 
     expect(
@@ -153,7 +154,8 @@ it("review_loop останавливается после трёх версий 
   const stopped = await waitFor(
     f.service,
     taskId,
-    /* Дожидается ожидаемого обновления React. */ (value) => value.task.phase === "stopped",
+    /* Проверяет остановку задачи после исчерпания лимита версий. */ (value) =>
+      value.task.phase === "stopped",
   );
 
   expect(stopped.state.createdVersions).toBe(3);
@@ -186,7 +188,8 @@ it("no_response требует явного повтора и сохраняет
   const unknown = await waitFor(
     f.service,
     taskId,
-    /* Дожидается ожидаемого обновления React. */ (value) => value.task.phase === "unknown_outcome",
+    /* Проверяет переход первого вызова в неизвестный исход. */ (value) =>
+      value.task.phase === "unknown_outcome",
   );
 
   expect(unknown.state.usedModelCalls).toBe(1);
@@ -207,7 +210,7 @@ it("no_response требует явного повтора и сохраняет
   await waitFor(
     restarted,
     taskId,
-    /* Дожидается ожидаемого обновления React. */ (value) =>
+    /* Проверяет неизвестный исход повторного вызова и расход двух попыток. */ (value) =>
       value.task.phase === "unknown_outcome" && value.state.usedModelCalls === 2,
   );
 
@@ -217,7 +220,8 @@ it("no_response требует явного повтора и сохраняет
   const stopped = await waitFor(
     restarted,
     taskId,
-    /* Дожидается ожидаемого обновления React. */ (value) => value.task.phase === "stopped",
+    /* Проверяет остановку после исчерпания общего бюджета вызовов. */ (value) =>
+      value.task.phase === "stopped",
   );
 
   expect(stopped.state.usedModelCalls).toBe(2);

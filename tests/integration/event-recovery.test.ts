@@ -12,7 +12,7 @@ async function setup() {
   return root;
 }
 afterEach(async () => {
-  // Освобождает процессы и ресурсы сценария, затем удаляет временные данные.
+  // Удаляет временные каталоги журналов после каждого сценария.
   await Promise.all(
     roots
       .splice(0)

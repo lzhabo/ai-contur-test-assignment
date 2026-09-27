@@ -93,6 +93,7 @@ it("A-09: одновременные создания с одним ключом
   // Проверяет сценарий: A-09: одновременные создания с одним ключом возвращают одну задачу.
 
   const f = await setup("slow");
+
   const results = await Promise.all([
     f.service.createTask({ text: "mergeIntervals" }, "same-key"),
     f.service.createTask({ text: "mergeIntervals" }, "same-key"),
@@ -108,6 +109,7 @@ it("A-09: разные одновременные запросы не запус
   // Проверяет сценарий: A-09: разные одновременные запросы не запускают две активные задачи.
 
   const f = await setup("slow");
+
   const results = await Promise.allSettled([
     f.service.createTask({ text: "mergeIntervals" }, "one"),
     f.service.createTask({ text: "catify" }, "two"),
@@ -125,14 +127,17 @@ it("A-03/A-04: неизвестный исход сохраняется посл
   // Проверяет сценарий: A-03/A-04: неизвестный исход сохраняется после перезапуска без скрытого повтора.
 
   const f = await setup("no_response");
+
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
   const before = await until(
     f.service,
     taskId,
     /* Проверяет достижение нужного состояния. */ (value) => value.task.phase === "unknown_outcome",
   );
+
   await f.service.close();
   services.splice(services.indexOf(f.service), 1);
+
   const restarted = await createAppService(f.options);
   services.push(restarted);
   const after = await restarted.getTask(taskId);
