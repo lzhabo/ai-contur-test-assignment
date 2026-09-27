@@ -1,10 +1,11 @@
-import { readFile } from "node:fs/promises";
-import { extname, relative, resolve, sep } from "node:path";
+import { createServer } from "node:http";
+import { resolve } from "node:path";
 import { loadAppConfig } from "../../shared/index.js";
 import { LocalArtifactStore } from "../artifacts/local-store.js";
 import { QuickJsCheckRunner } from "../checks/quickjs-runner.js";
 import { CodexCliPort } from "../codex/cli-port.js";
-import { createHttpApp } from "../http/app.js";
+import { createHttpApp, closeHttpStreams } from "../http/app.js";
+import { installFrontendFallback } from "../http/frontend.js";
 import { createFakeCodexPort } from "../codex/fake-port.js";
 import { createAppService } from "../workflow/service.js";
 import { createStructuredLogger, safeErrorClass } from "../observability/logger.js";
@@ -26,44 +27,45 @@ const service = await createAppService({
   throw error;
 });
 const app = createHttpApp(service);
-app.addHook("onClose", async () => { await service.close(); await logger.close(); });
-const distRoot = resolve(process.cwd(), "dist");
-const mimeTypes: Record<string, string> = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".ico": "image/x-icon",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-};
+installFrontendFallback(app, resolve(process.cwd(), "dist"));
 
-app.setNotFoundHandler(async (request, reply) => {
-  if (request.url.startsWith("/api/")) {
-    return reply.code(404).send({ code: "not_found", message: "Unknown API route" });
-  }
-  const requested = new URL(request.url, "http://localhost").pathname;
-  const candidate = resolve(distRoot, `.${requested}`);
-  const withinDist = candidate === distRoot || relative(distRoot, candidate).split(sep)[0] !== "..";
-  if (!withinDist) {
-    return reply.code(404).send("Not found");
-  }
-  try {
-    const file = await readFile(candidate);
-    reply.type(mimeTypes[extname(candidate)] ?? "application/octet-stream");
-    return reply.send(file);
-  } catch {
+const server = createServer(app);
+let closing: Promise<void> | undefined;
+function close(): Promise<void> {
+  if (closing) return closing;
+  closing = (async () => {
+    closeHttpStreams(app);
     try {
-      const html = await readFile(resolve(distRoot, "index.html"));
-      reply.type(mimeTypes[".html"]);
-      return reply.send(html);
-    } catch {
-      return reply.code(503).send("Frontend build is unavailable; run npm run build");
+      if (server.listening) {
+        const stopped = new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+        server.closeAllConnections();
+        await stopped;
+      }
+    } finally {
+      try { await service.close(); }
+      finally { await logger.close(); }
     }
-  }
-});
+  })();
+  return closing;
+}
 
-try { await app.listen({ host: config.host, port: config.port }); }
-catch (error) { await app.close(); throw error; }
-process.once("SIGINT", () => { void app.close(); });
-process.once("SIGTERM", () => { void app.close(); });
+try {
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(config.port, config.host, () => { server.off("error", reject); resolve(); });
+  });
+} catch (error) {
+  await logger.record({ event: "server_start_failed", source: "main", errorClass: safeErrorClass(error) });
+  await close();
+  throw error;
+}
+await logger.record({ event: "server_started", source: "main", host: config.host, port: config.port, executionMode: config.executionMode }).catch(() => undefined);
+
+function onSignal(): void {
+  void close().then(
+    () => process.exit(0),
+    error => { console.error(error); process.exit(1); },
+  );
+}
+process.once("SIGINT", onSignal);
+process.once("SIGTERM", onSignal);

@@ -2,7 +2,7 @@
 
 Локальное веб-приложение для разработки одной TypeScript-функции. Автор готовит код, ревьюер на другой модели проверяет его, а третий агент инициирует сохранение одобренной версии после решения пользователя. LangGraph управляет процессом; официальный SqliteSaver сохраняет состояние, файлы лежат в отдельной папке каждой задачи.
 
-**Статус:** приложение реализовано; независимые проверки типов, сборка и 79 тестов прошли, замечания ревью исправлены. Реальный прогон дошёл до подтверждения пользователя; третий реальный агент пока не проверен в полном сценарии. Приёмка человеком ещё не проведена. [Инструкция передачи](tasks/two-model-loop/delivery/handoff.md), [отчёт проверок](tasks/two-model-loop/verification.md).
+**Статус:** приложение реализовано; backend перенесён на Express, проверки типов, сборка и 85 тестов прошли. Реальный прогон исходной версии дошёл до подтверждения пользователя; третий реальный агент пока не проверен в полном сценарии. Приёмка человеком ещё не проведена. [Инструкция передачи](tasks/two-model-loop/delivery/handoff.md), [отчёт проверок](tasks/two-model-loop/verification.md), [проверки переноса](tasks/express-migration/verification.md).
 
 ## Запуск
 
@@ -62,11 +62,15 @@ APP_CODEX_MODE=fake APP_FAKE_SCENARIO=review_once APP_DATA_DIR=.local-data/demo-
 ## Структура и документы
 
 - `src/web/` — React-интерфейс.
-- `src/server/` — граф, HTTP, Codex, файлы, проверки и журнал событий.
+- `src/server/http/app.ts` — Express middleware, JSON API и SSE; `frontend.ts` — выдача `dist` и SPA fallback.
+- `src/server/main/index.ts` — запуск Node HTTP server, сигналы и закрытие ресурсов.
+- `src/server/workflow/service.ts` — операции задач и ошибки сервиса; транспортные маршруты не содержат бизнес-логики.
+- `src/server/` — граф, Codex, файлы, проверки и журнал событий.
 - `src/shared/` — типы, схемы, лимиты и примеры задач.
 - `tests/` — проверки и независимые тестовые данные.
 - [ТЗ](tasks/two-model-loop/brief.md), [архитектура](tasks/two-model-loop/architecture.md), [план](tasks/two-model-loop/plan.md), [решения](tasks/two-model-loop/decisions.md).
 - [Исходное задание](tasks/two-model-loop/source/new-test-task-from-bio.txt) сохранено без изменений.
+- [Матрица переноса Fastify → Express](tasks/express-migration/plan.md), [проверки переноса](tasks/express-migration/verification.md).
 - [Настоящие переписки](tasks/two-model-loop/delivery/conversations/README.md), [сценарий демонстрации](tasks/two-model-loop/delivery/demo.md).
 
 Правила совместной разработки находятся в `AGENTS.md` и `workflow/PROCESS.md`. Это инструкции команде разработчиков, а не реализация графа агентов продукта.

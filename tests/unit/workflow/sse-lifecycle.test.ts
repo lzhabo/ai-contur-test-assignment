@@ -1,5 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,22 +33,33 @@ it("opens an idle SSE immediately and closes it with the server, releasing the d
   const root = await mkdtemp(join(tmpdir(), "loop-sse-close-")); roots.push(root);
   const artifacts = new LocalArtifactStore(root);
   const service = await createAppService({ dataDir: root, executionMode: "fake", ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex: createFakeCodexPort("happy") } });
-  const app = createHttpApp(service);
-  app.addHook("onClose", async () => service.close());
+  const server = createHttpServer(createHttpApp(service));
+  let closed = false;
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    if (server.listening) {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+    await service.close();
+  };
   try {
     const { taskId, cursor } = await paused(service);
-    const address = await app.listen({ host: "127.0.0.1", port: 0 });
-    const response = await within(fetch(`${address}/api/tasks/${taskId}/events?after=${cursor}`), 1_000);
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("No HTTP port");
+    const response = await within(fetch(`http://127.0.0.1:${address.port}/api/tasks/${taskId}/events?after=${cursor}`), 1_000);
     expect(response.status).toBe(200);
     const reader = response.body!.getReader();
     const first = await within(reader.read(), 1_000);
     expect(new TextDecoder().decode(first.value)).toContain(": connected\n\n");
-    await within(app.close(), 2_000);
+    await within(close(), 2_000);
     const lock = await within(acquireDataLock(root), 1_000);
     await lock.release();
     await reader.cancel().catch(() => undefined);
   } finally {
-    await app.close();
+    await close();
   }
 }, 10_000);
 
@@ -97,3 +109,23 @@ it("SIGTERM closes a real server with idle SSE and releases its data lock", asyn
     await exit;
   }
 }, 15_000);
+
+it("releases the data lock when the HTTP port is already occupied", async () => {
+  const root = await mkdtemp(join(tmpdir(), "loop-listen-fail-")); roots.push(root);
+  const socket = createServer();
+  await new Promise<void>(resolve => socket.listen(0, "127.0.0.1", resolve));
+  const address = socket.address();
+  if (!address || typeof address === "string") throw new Error("No TCP port");
+  const child = spawn(process.execPath, ["--import", "tsx", "src/server/main/index.ts"], {
+    cwd: process.cwd(), env: { ...process.env, APP_PORT: String(address.port), APP_DATA_DIR: root, APP_CODEX_MODE: "fake" }, stdio: ["ignore", "ignore", "pipe"],
+  });
+  try {
+    const exit = await within(new Promise<number | null>(resolve => child.once("exit", code => resolve(code))), 5_000);
+    expect(exit).not.toBe(0);
+    const lock = await within(acquireDataLock(root), 1_000);
+    await lock.release();
+  } finally {
+    child.kill("SIGKILL");
+    await new Promise<void>(resolve => socket.close(() => resolve()));
+  }
+}, 10_000);
