@@ -20,3 +20,18 @@ Socket-тесты требуют разрешения на loopback в sandbox; 
 Независимый reviewer на `84e0197` нашёл три расхождения парсеров (`text/plain`, JSON-скаляры, `application/*+json`) и риск symlink в `dist`; исправления внесены после первого коммита. QA на `84e0197` подтвердил 85/85 тестов, typecheck и build. Повторные проверки после исправлений: typecheck, 87/87 тестов, build и браузерный E2E 1/1. Два теста подтверждают, что symlink на asset или fallback index за пределами `dist` не отдаёт файл.
 
 Повторные независимые QA и reviewer на `de3c2bd` подтвердили исправление этих дефектов и не нашли новых production-дефектов. QA отдельно прогнал 12 адресных тестов и браузерный E2E 1/1. Reviewer отметил переносимость E2E при переопределении ID моделей; селекторы теста исправлены, E2E 1/1 прошёл также с `AUTHOR_MODEL=custom-author`, `REVIEWER_MODEL=custom-reviewer`, `APPLIER_MODEL=custom-applier`.
+
+## Доказательства по контрактам
+
+| Контракт | Доказательство |
+| --- | --- |
+| `GET /api/health`, `GET /api/tasks`, конфигурация fake/real | HTTP integration проверяет health; smoke каждого fake-сценария проверил health и список после рестарта; режим и настройки загружаются прежним `loadAppConfig` |
+| `POST /api/tasks`: 202, Zod, Idempotency-Key, одна активная задача | `tests/integration/http-events.test.ts` («public API»); `tests/integration/service.test.ts` («concurrent duplicate task submission», «distinct concurrent creates») |
+| `GET /api/tasks/:id`, POST decision/stop/resume, stale approval и ручной unknown retry | Сквозной HTTP smoke выполнял чтение/decision/stop; `tests/integration/service.test.ts` проверяет stale approval, stop/approval race и unknown outcome после рестарта; маршруты вызывают неизменённый типизированный `AppService` |
+| Origin, ServiceError/Zod/internal error без утечки | `tests/integration/http-events.test.ts` проверяет 403, 400, 500 и коды JSON; middleware сохраняет прежние русские сообщения `ServiceError` |
+| JSON/text parser, 1 MiB, HEAD и cursor safe integer | `tests/integration/http-events.test.ts` («HTTP parser», «public API»); после reviewer добавлены text/plain, JSON scalar и unsupported `application/problem+json` |
+| SSE task до headers, `Last-Event-ID` выше `after`, connected, replay/live и отсутствие дублей | `tests/integration/http-events.test.ts` («SSE streams», «SSE sends an event appended during replay exactly once»); 15-секундный heartbeat и cleanup отражены в `src/server/http/app.ts` |
+| SSE shutdown, SIGTERM, ошибка listen, data lock | `tests/unit/workflow/sse-lifecycle.test.ts` (три socket-теста), HTTP smoke с SIGTERM и повторным использованием данных |
+| Artifact text, download header, бинарный ZIP | `tests/integration/http-events.test.ts` («published artifacts»): сравнение текста с сервисом и распаковка ZIP; HTTP smoke также проверил ZIP после approval |
+| `dist` MIME, SPA fallback, неизвестный `/api/`, 503 без сборки, запрет выхода из `dist` | `tests/integration/http-frontend.test.ts`: четыре теста, включая symlink на asset и fallback index; браузерный E2E проверил реальную сборку |
+| UI API без изменения frontend контракта | `tests/e2e/product-flow.spec.ts` прошёл с default и переопределёнными model ID; отдельный UI smoke прошёл для всех пяти fake-сценариев |
