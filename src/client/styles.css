@@ -490,6 +490,21 @@ pre {
   margin-top: 14px;
   flex-wrap: wrap;
 }
+
+.connection-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.connection-status ul {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+.connection-status li + li {
+  margin-top: 8px;
+}
 .file-tabs {
   display: flex;
   gap: 0;

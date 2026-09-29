@@ -10,6 +10,7 @@ interface NewTaskProps {
   serverMode: "real" | "mock" | undefined;
   activeId: string | null;
   busy: boolean;
+  connectionReady: boolean;
   create: (text: string) => Promise<void>;
   selectTask: (id: string | null) => void;
 }
@@ -21,6 +22,7 @@ export function NewTask({
   serverMode,
   activeId,
   busy,
+  connectionReady,
   create,
   selectTask,
 }: NewTaskProps): ReactElement {
@@ -67,6 +69,7 @@ export function NewTask({
         onSubmit={(e) => {
           // Отправляет текст формы без перезагрузки страницы.
           e.preventDefault();
+          if (!connectionReady || busy || activeId || !text.trim()) return;
           void create(text);
         }}
       >
@@ -89,7 +92,7 @@ export function NewTask({
           <button
             type="submit"
             className="primary"
-            disabled={busy || !text.trim() || Boolean(activeId)}
+            disabled={!connectionReady || busy || !text.trim() || Boolean(activeId)}
           >
             {busy ? "Создаём задачу…" : "Запустить агентов →"}
           </button>

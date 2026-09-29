@@ -18,6 +18,8 @@ const artifacts = new LocalArtifactStore(dataDir);
 const adapter = executionMode === "real" ? new CodexCliPort() : createMockCodexPort("happy");
 const roles: string[] = [];
 const codex: CodexPort = {
+  checkReadiness:
+    executionMode === "real" ? () => (adapter as CodexCliPort).checkReadiness() : undefined,
   // Учитывает фактические вызовы ролей без записи пользовательского текста или авторизации.
   async run(request, hooks) {
     roles.push(request.role);

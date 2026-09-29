@@ -1,4 +1,6 @@
 import { resolve } from "node:path";
+import type { CodexReadiness } from "../../shared/connections.js";
+import { readConnections } from "./connections.js";
 import type {
   DecisionRequest,
   ResumeRequest,
@@ -33,6 +35,7 @@ export interface AppServiceOptions {
 }
 
 export interface AppService {
+  getConnections(): Promise<CodexReadiness>;
   readonly events: EventJournal;
   readonly executionMode: "real" | "mock";
   createTask(input: { text: string }, idempotencyKey?: string): Promise<{ taskId: string }>;
@@ -77,7 +80,14 @@ export async function createAppService(options: AppServiceOptions): Promise<AppS
       await logger.flush();
     }
 
-    return { events, executionMode: runtime.executionMode, ...view, ...commands, close };
+    return {
+      events,
+      executionMode: runtime.executionMode,
+      getConnections: () => readConnections(runtime.ports.codex, runtime.executionMode),
+      ...view,
+      ...commands,
+      close,
+    };
   } catch (error) {
     await logger.record({
       event: "service_start_failed",

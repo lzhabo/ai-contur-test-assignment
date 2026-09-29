@@ -3,6 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import type { CodexReadiness } from "../../shared/connections.js";
+import { inspectCli, killGroup } from "./cli-readiness.js";
+import { providerFailure } from "./connection-error.js";
 import { SupportedModelSchema } from "./models.js";
 import type { CodexPort, CodexRunHooks, CodexRunRequest, CodexRunResult } from "../tasks/ports.js";
 import {
@@ -13,7 +16,6 @@ import {
   type ProcessObservation,
 } from "../tasks/types.js";
 
-const CLI_VERSION = "codex-cli 0.156.1";
 const MAX_CONTEXT_BYTES = 96 * 1024;
 const MAX_EVENT_BYTES = 512 * 1024;
 const MAX_STDERR_BYTES = 32 * 1024;
@@ -76,27 +78,6 @@ function normalizeOutput(kind: CodexRunRequest["expectedOutputKind"], value: unk
   return ApplierOutputSchema.parse(value);
 }
 
-/** Извлекает короткую диагностику провайдера и скрывает вероятные секреты. */
-function providerDiagnostic(raw: unknown): string {
-  if (typeof raw !== "string") return "unknown provider error";
-  const sanitize = /* Удаляет токены доступа и ограничивает длину диагностического сообщения. */ (
-    value: string,
-  ) =>
-    value
-      .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
-      .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
-      .slice(0, 400);
-  try {
-    const parsed = JSON.parse(raw) as { error?: { code?: unknown; message?: unknown } };
-    if (typeof parsed.error?.code === "string" && typeof parsed.error.message === "string") {
-      return sanitize(`${parsed.error.code}: ${parsed.error.message}`);
-    }
-  } catch {
-    /* plain diagnostic */
-  }
-  return sanitize(raw);
-}
-
 /** Создаёт наблюдение с явным источником и стадией локального процесса. */
 function observed(
   source: string,
@@ -107,106 +88,14 @@ function observed(
   return { at: new Date().toISOString(), source, name, stage, detail };
 }
 
-/** Посылает группе процессов SIGTERM, затем SIGKILL, если завершение задержалось. */
-function killGroup(pid: number | undefined): void {
-  if (!pid) return;
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {
-    return;
-  }
-  const force = setTimeout(
-    /* Принудительно завершает оставшуюся группу процессов после льготного интервала. */ () => {
-      try {
-        process.kill(-pid, "SIGKILL");
-      } catch {
-        /* already exited */
-      }
-    },
-    1000,
-  );
-  force.unref();
-}
-
-/** Читает версию CLI с ограничением вывода, отменой и общим сроком ожидания. */
-async function commandVersion(
-  binary: string,
-  signal: AbortSignal,
-  deadline: number,
-): Promise<string> {
-  return new Promise(
-    /* Запускает процесс проверки версии и собирает ограниченный ответ. */ (resolve, reject) => {
-      const child = spawn(binary, ["--version"], {
-        detached: true,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      let output = "";
-      let failed: Error | null = null;
-      const fail = /* Сохраняет первую ошибку проверки версии и останавливает её процесс. */ (
-        message: string,
-      ) => {
-        failed ??= new Error(message);
-        killGroup(child.pid);
-      };
-      const abort = /* Отменяет проверку версии по сигналу задачи. */ () =>
-        fail("Codex run aborted");
-      const timer = setTimeout(
-        /* Останавливает проверку версии при истечении срока. */ () =>
-          fail("Codex version check timed out"),
-        Math.max(1, Math.min(2000, deadline - Date.now())),
-      );
-      signal.addEventListener("abort", abort, { once: true });
-      child.stdout.setEncoding("utf8");
-      child.stderr.setEncoding("utf8");
-      child.stdout.on(
-        "data",
-        /* Собирает stdout версии и пресекает превышение лимита вывода. */ (data: string) => {
-          output += data;
-          if (Buffer.byteLength(output) > 256) fail("Codex version output exceeded limit");
-        },
-      );
-      let versionStderrBytes = 0;
-      child.stderr.on(
-        "data",
-        /* Ограничивает stderr проверки версии без включения его содержимого в ошибку. */ (
-          data: string,
-        ) => {
-          versionStderrBytes += Buffer.byteLength(data);
-          if (versionStderrBytes > 4096) fail("Codex version stderr exceeded limit");
-        },
-      );
-      child.once(
-        "error",
-        /* Преобразует ошибку запуска процесса в ошибку проверки версии. */ (error) =>
-          fail(`Codex version process error: ${error.message}`),
-      );
-      child.once(
-        "close",
-        /* Освобождает таймер и возвращает версию только при успешном завершении процесса. */ (
-          code,
-        ) => {
-          clearTimeout(timer);
-          signal.removeEventListener("abort", abort);
-          if (failed) reject(failed);
-          else if (code === 0) resolve(output.trim());
-          else reject(new Error("Codex version check failed"));
-        },
-      );
-    },
-  );
-}
-
 export class CodexCliPort implements CodexPort {
   /** Сохраняет путь к локальному Codex CLI, использующему текущую авторизацию. */
   constructor(private readonly binary = "/opt/homebrew/bin/codex") {}
 
-  /** Проверяет точное совпадение версии CLI с поддерживаемым протоколом. */
-  private verifyCli(signal: AbortSignal, deadline: number): Promise<void> {
-    return commandVersion(this.binary, signal, deadline).then(
-      /* Отклоняет неподдерживаемую версию Codex CLI. */ (actual) => {
-        if (actual !== CLI_VERSION) throw new Error(`Unsupported Codex CLI version: ${actual}`);
-      },
-    );
+  /** Возвращает состояние локальных соединений без облачного вызова. */
+  async checkReadiness(): Promise<CodexReadiness> {
+    return (await inspectCli(this.binary, new AbortController().signal, Date.now() + 5000))
+      .readiness;
   }
 
   /** Проверяет запрос и запускает Codex в отдельной временной папке, затем удаляет её. */
@@ -227,7 +116,8 @@ export class CodexCliPort implements CodexPort {
       throw new Error("Invalid model timeout");
     if (hooks.signal.aborted) throw new Error("Codex run aborted");
     const deadline = Date.now() + request.timeoutMs;
-    await this.verifyCli(hooks.signal, deadline);
+    const { error } = await inspectCli(this.binary, hooks.signal, deadline);
+    if (error) throw error;
     if (hooks.signal.aborted || Date.now() >= deadline)
       throw new Error("Codex run aborted or timed out");
     const dir = await mkdtemp(path.join(os.tmpdir(), "kontur-codex-"));
@@ -301,15 +191,18 @@ export class CodexCliPort implements CodexPort {
         );
     };
     const fail = /* Сохраняет первую ошибку вызова и завершает группу процессов Codex. */ (
-      message: string,
+      message: string | Error,
     ) => {
-      failure ??= new Error(message);
+      failure ??= typeof message === "string" ? new Error(message) : message;
       killGroup(child.pid);
     };
     const abort = /* Отменяет выполняющийся вызов по сигналу задачи. */ () =>
       fail("Codex run aborted");
     const timer = setTimeout(
-      /* Останавливает вызов по общему сроку ожидания. */ () => fail("Codex run timed out"),
+      /* Останавливает вызов по общему сроку ожидания, сохраняя неизвестность результата. */ () =>
+        fail(
+          "Codex не завершил запрос за отведённое время. Проверьте сеть и доступность сервиса. Повтор может создать новый вызов модели.",
+        ),
       Math.max(1, deadline - Date.now()),
     );
     hooks.signal.addEventListener("abort", abort, { once: true });
@@ -320,8 +213,8 @@ export class CodexCliPort implements CodexPort {
     );
     child.once(
       "error",
-      /* Преобразует ошибку процесса Codex в ошибку вызова. */ (error) =>
-        fail(`Codex process error: ${error.message}`),
+      /* Не раскрывает окружение процесса при неизвестном исходе вызова. */ () =>
+        fail(providerFailure(null)),
     );
     child.stdin.on(
       "error",
@@ -366,12 +259,9 @@ export class CodexCliPort implements CodexPort {
           completed = true;
           return;
         }
-        if (event.type === "error")
-          return fail(`Codex provider error: ${providerDiagnostic(event.message)}`);
+        if (event.type === "error") return fail(providerFailure(event.message));
         if (event.type === "turn.failed")
-          return fail(
-            `Codex turn failed: ${providerDiagnostic((event.error as { message?: unknown } | undefined)?.message)}`,
-          );
+          return fail(providerFailure((event.error as { message?: unknown } | undefined)?.message));
         if (event.type === "item.completed") {
           const item = event.item as Record<string, unknown> | undefined;
           if (
@@ -442,10 +332,9 @@ export class CodexCliPort implements CodexPort {
     hooks.signal.removeEventListener("abort", abort);
     emit("process_closed", "process_exited", exit.signal ?? String(exit.code));
     await observationQueue;
-    if (raw.trim()) throw new Error("Truncated Codex JSONL event");
     if (failure) throw failure;
-    if (exit.code !== 0 || !started || !completed || !output)
-      throw new Error(`Incomplete Codex run (exit ${exit.code})`);
+    if (raw.trim()) throw new Error("Truncated Codex JSONL event");
+    if (exit.code !== 0 || !started || !completed || !output) throw providerFailure(null);
     return { output, modelId: request.modelId, responseAt: new Date().toISOString() };
   }
 }

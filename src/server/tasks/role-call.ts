@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
+import { CodexConnectionError } from "../codex/connection-error.js";
 import type { AgentRole } from "../../shared/api.js";
 import { type ObservabilityLogger } from "../logger.js";
 import type { TaskEventInput, TaskRuntimePorts } from "./ports.js";
@@ -211,7 +212,10 @@ export function createRoleCalls(hooks: AgentHooks): RoleCalls {
   /** Различает остановку, известную ошибку и неизвестный исход, требующий явного повтора. */
   async function failed(state: TaskState, error: unknown): Promise<TaskState> {
     const stopped = hooks.isStopRequested(state.taskId);
-    const known = error instanceof KnownAgentError || error instanceof ZodError;
+    const known =
+      error instanceof KnownAgentError ||
+      error instanceof ZodError ||
+      error instanceof CodexConnectionError;
     const reason = error instanceof Error ? error.message : String(error);
     const attempt = state.activeAttempt;
     const ended = attempt

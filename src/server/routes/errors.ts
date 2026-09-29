@@ -4,6 +4,7 @@ import { safeErrorClass } from "../logger.js";
 import { ServiceError, type ServiceErrorCode } from "../tasks/errors.js";
 
 const serviceStatus: Record<ServiceErrorCode, number> = {
+  codex_not_ready: 503,
   idempotency_conflict: 409,
   active_task: 409,
   mode_mismatch: 409,

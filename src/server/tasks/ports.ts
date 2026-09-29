@@ -1,4 +1,5 @@
 import type { AgentRole, TaskEvent } from "../../shared/api.js";
+import type { CodexReadiness } from "../../shared/connections.js";
 import type {
   Approval,
   ArtifactFileRef,
@@ -35,6 +36,7 @@ export interface CodexRunResult {
 }
 
 export interface CodexPort {
+  checkReadiness?(): Promise<CodexReadiness>;
   run(request: CodexRunRequest, hooks: CodexRunHooks): Promise<CodexRunResult>;
 }
 

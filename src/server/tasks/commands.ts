@@ -14,6 +14,7 @@ import { stateSummary } from "../logger.js";
 import { ApprovalSchema, TaskStateSchema, type Approval, type TaskState } from "./types.js";
 
 import { ServiceError } from "./errors.js";
+import { requireCodexReady } from "./connections.js";
 import { now, terminal, type TaskRuntime } from "./runtime.js";
 import type { AppService } from "./service.js";
 import type { TaskView } from "./task-view.js";
@@ -83,6 +84,7 @@ export function createTaskCommands(runtime: TaskRuntime, view: TaskView): TaskCo
     }
     if ((await listTasks()).activeTaskId)
       throw new ServiceError("active_task", "Сначала завершите текущую задачу.");
+    await requireCodexReady(ports.codex, executionMode);
     const taskId = randomUUID();
     const createdAt = now();
     const initial = TaskStateSchema.parse({
@@ -197,6 +199,7 @@ export function createTaskCommands(runtime: TaskRuntime, view: TaskView): TaskCo
     )
       throw new ServiceError("stale_version", "Показанная версия изменилась; обновите задачу.");
     if (pending) throw new ServiceError("decision_pending", "Решение уже обрабатывается.");
+    if (parsed.decision === "approve") await requireCodexReady(ports.codex, executionMode);
     await ports.artifacts.verifyVersion(state.currentArtifact);
     const approval = ApprovalSchema.parse({ ...parsed, at: now() });
     await logger.record({
@@ -315,6 +318,7 @@ export function createTaskCommands(runtime: TaskRuntime, view: TaskView): TaskCo
     if (state.phase !== "unknown_outcome" || parsed.mode !== "retry_unknown")
       throw new ServiceError("resume_not_allowed", "Нужен явный повтор неизвестного вызова.");
     if (activeRuns.has(taskId)) throw new ServiceError("task_running", "Задача ещё выполняется.");
+    await requireCodexReady(ports.codex, executionMode);
     startRun(taskId, new Command({ resume: { retry: true } }));
     await logger.record({
       event: "resume_requested",

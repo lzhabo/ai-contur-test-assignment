@@ -12,6 +12,10 @@ type ArtifactParams = TaskParams & { artifactId: string };
 // Проверяет входные схемы и связывает HTTP-маршруты с операциями задач.
 export function createTaskRoutes(service: AppService, activeStreams: Set<Response>): Router {
   const api = express.Router();
+  api.get("/connections", async (_request, response) => {
+    response.setHeader("Cache-Control", "no-store");
+    response.json(await service.getConnections());
+  });
   api.get(
     "/health",
     /* Возвращает доступность сервера и фактический режим Codex. */ (_request, response) => {

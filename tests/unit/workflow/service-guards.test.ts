@@ -39,7 +39,22 @@ async function setup(
   const service = await createAppService({
     dataDir: root,
     executionMode: mode,
-    ports: { artifacts, checks: new QuickJsCheckRunner(artifacts), codex },
+    ports: {
+      artifacts,
+      checks: new QuickJsCheckRunner(artifacts),
+      codex: {
+        run: (request, hooks) => codex.run(request, hooks),
+        // Метка real проверяет несовпадение режимов; вход и ответы здесь явно замоканы.
+        checkReadiness: async () => ({
+          executionMode: mode,
+          ready: true,
+          checkedAt: new Date().toISOString(),
+          checks: [
+            { id: "auth", status: "passed", message: "Mock проверки входа для теста режимов." },
+          ],
+        }),
+      },
+    },
   });
   services.push(service);
   return { service, artifacts };

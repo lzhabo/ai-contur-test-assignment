@@ -1,4 +1,5 @@
 export type ServiceErrorCode =
+  | "codex_not_ready"
   | "idempotency_conflict"
   | "active_task"
   | "mode_mismatch"

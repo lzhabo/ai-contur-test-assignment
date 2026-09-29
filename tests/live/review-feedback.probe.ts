@@ -59,6 +59,7 @@ let authorCount = 0;
 let secondAuthorSawReview = false;
 
 const codex: CodexPort = {
+  checkReadiness: () => real.checkReadiness(),
   // Подставляет только первую ошибочную версию автора; остальные вызовы выполняет через настоящий Codex CLI.
   async run(request, hooks): Promise<CodexRunResult> {
     if (request.role === "author" && authorCount++ === 0) {

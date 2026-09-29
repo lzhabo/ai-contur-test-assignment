@@ -5,10 +5,13 @@ import { useTaskCommands } from "./hooks/use-task-commands";
 import { Sidebar } from "./components/Sidebar";
 import { NewTask } from "./components/NewTask";
 import { TaskView } from "./components/TaskView";
+import { ConnectionStatus } from "./components/ConnectionStatus";
+import { useConnections } from "./hooks/use-connections";
 
 /** Собирает страницы; запросы, подписки и команды выполняют специализированные hooks. */
 export function App(): ReactElement {
   const workspace = useWorkspace();
+  const connections = useConnections();
   const task = useTask(workspace.taskId);
   const commands = useTaskCommands(workspace.selectTask, workspace.taskId);
   const [draft, setDraft] = useState("");
@@ -38,6 +41,7 @@ export function App(): ReactElement {
           </span>
         </header>
         <div className="page">
+          <ConnectionStatus {...connections} />
           {error && dismissedError !== errorKey && (
             <div className="notice error page-error" role="alert">
               {error}
@@ -61,6 +65,7 @@ export function App(): ReactElement {
               serverMode={workspace.serverMode}
               activeId={workspace.activeId}
               busy={commands.busy}
+              connectionReady={connections.ready}
               create={commands.create}
               selectTask={selectTask}
             />
