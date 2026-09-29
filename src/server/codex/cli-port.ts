@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import { SupportedModelSchema } from "./models.js";
 import type { CodexPort, CodexRunHooks, CodexRunRequest, CodexRunResult } from "../tasks/ports.js";
 import {
   ApplierOutputSchema,
@@ -212,11 +213,8 @@ export class CodexCliPort implements CodexPort {
   async run(request: CodexRunRequest, hooks: CodexRunHooks): Promise<CodexRunResult> {
     if (roles[request.role] !== request.expectedOutputKind)
       throw new Error("Role and output kind mismatch");
-    if (!/^[a-z0-9][a-z0-9.-]{1,80}$/.test(request.modelId)) throw new Error("Invalid model ID");
-    if (request.role === "reviewer" && request.modelId !== "gpt-6-luna")
-      throw new Error("Reviewer model mismatch");
-    if (request.role !== "reviewer" && request.modelId !== "gpt-6-sol")
-      throw new Error("Author/applier model mismatch");
+    if (!SupportedModelSchema.safeParse(request.modelId).success)
+      throw new Error(`Unsupported model ID: ${request.modelId}`);
     const prompt =
       request.contextText +
       (request.expectedOutputKind === "candidate" ? authorTransportInstruction : "");
@@ -232,7 +230,7 @@ export class CodexCliPort implements CodexPort {
     await this.verifyCli(hooks.signal, deadline);
     if (hooks.signal.aborted || Date.now() >= deadline)
       throw new Error("Codex run aborted or timed out");
-    const dir = await mkdtemp(path.join(os.tmpdir(), "two-model-codex-"));
+    const dir = await mkdtemp(path.join(os.tmpdir(), "kontur-codex-"));
     const schemaPath = path.join(dir, "response.schema.json");
     try {
       const schema = providerSchema(request.expectedOutputKind);
@@ -410,9 +408,7 @@ export class CodexCliPort implements CodexPort {
                       ) => `${issue.path.join(".")}:${issue.code}`,
                     )
                     .join(",")
-                : error instanceof SyntaxError
-                  ? "invalid casesJson"
-                  : "unknown";
+                : "unknown";
             return fail(`Invalid structured Codex response (${reason.slice(0, 300)})`);
           }
           return;

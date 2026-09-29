@@ -10,7 +10,7 @@ import type { Approval, AuthorOutput, ArtifactRef } from "../../src/server/tasks
 const roots: string[] = [];
 // Создаёт изолированные ресурсы сценария и регистрирует их для последующей очистки.
 async function setup() {
-  const root = await mkdtemp(path.join(tmpdir(), "loop-qa-artifacts-"));
+  const root = await mkdtemp(path.join(tmpdir(), "kontur-qa-artifacts-"));
   roots.push(root);
   return { root, store: new LocalArtifactStore(root) };
 }
@@ -40,8 +40,6 @@ afterEach(async () => {
 });
 
 describe("A-08/A-10: подтверждённые файлы на настоящем диске", () => {
-  // Объединяет проверки: A-08/A-10: подтверждённые файлы на настоящем диске.
-
   it("сохраняет черновики неопубликованными и публикует только подтверждённые байты", async () => {
     // Отклоняет неверные решения, публикует подтверждённую версию и сверяет диск, скачивание и ZIP.
     const { root, store } = await setup();
@@ -83,8 +81,6 @@ describe("A-08/A-10: подтверждённые файлы на настоящ
   });
 
   it("после перезапуска отклоняет отсутствующую или изменённую версию", async () => {
-    // Проверяет сценарий: после перезапуска отклоняет отсутствующую или изменённую версию.
-
     const { root, store } = await setup();
     const ref = await store.writeVersion({ taskId: "qa-tamper", candidate });
     await store.verifyVersion(ref);
@@ -103,8 +99,6 @@ describe("A-08/A-10: подтверждённые файлы на настоящ
   });
 
   it("не заменяет опубликованный результат другой подтверждённой версией", async () => {
-    // Проверяет сценарий: не заменяет опубликованный результат другой подтверждённой версией.
-
     const { store } = await setup();
     const ref = await store.writeVersion({ taskId: "qa-conflict", candidate });
     await store.publishApprovedVersion(ref, approve(ref));
@@ -125,8 +119,6 @@ describe("A-08/A-10: подтверждённые файлы на настоящ
   });
 
   it("отклоняет обход пути и чтение файла чужой задачи", async () => {
-    // Проверяет сценарий: отклоняет обход пути и чтение файла чужой задачи.
-
     const { store } = await setup();
     for (const taskId of ["../outside", "/tmp/outside", "one/two"]) {
       await expect(store.writeVersion({ taskId, candidate })).rejects.toThrow(
@@ -145,8 +137,6 @@ describe("A-08/A-10: подтверждённые файлы на настоящ
   });
 
   it("отклоняет символическую ссылку вместо файла результата", async () => {
-    // Проверяет сценарий: отклоняет символическую ссылку вместо файла результата.
-
     const { root, store } = await setup();
     const ref = await store.writeVersion({ taskId: "qa-link", candidate });
     await store.verifyVersion(ref);
@@ -165,8 +155,6 @@ describe("A-08/A-10: подтверждённые файлы на настоящ
   });
 
   it("отклоняет символическую ссылку вместо каталога версий, включая скачивание", async () => {
-    // Проверяет сценарий: отклоняет символическую ссылку вместо каталога версий, включая скачивание.
-
     const { root, store } = await setup();
     const ref = await store.writeVersion({ taskId: "qa-parent", candidate });
     await store.verifyVersion(ref);
@@ -182,8 +170,6 @@ describe("A-08/A-10: подтверждённые файлы на настоящ
   });
 
   it("отклоняет символическую ссылку вместо каталога задачи при скачивании ZIP", async () => {
-    // Проверяет сценарий: отклоняет символическую ссылку вместо каталога задачи при скачивании ZIP.
-
     const { root, store } = await setup();
     const ref = await store.writeVersion({ taskId: "qa-zip", candidate });
     await store.publishApprovedVersion(ref, approve(ref));

@@ -1,10 +1,10 @@
 import { CodexCliPort } from "../../../src/server/codex/cli-port.js";
 
 const observations: string[] = [];
-const result = await new CodexCliPort(process.env.E2_CODEX_BINARY).run(
+const result = await new CodexCliPort(process.env.QA_CODEX_BINARY).run(
   {
-    taskId: "e2_probe",
-    attemptId: "e2_probe_author_1",
+    taskId: "candidate_probe",
+    attemptId: "candidate_probe_author_1",
     role: "author",
     modelId: "gpt-6-sol",
     expectedOutputKind: "candidate",

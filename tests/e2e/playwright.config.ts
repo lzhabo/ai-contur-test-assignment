@@ -12,7 +12,7 @@ export default defineConfig({
   workers: 1,
   timeout: real ? 300_000 : 45_000,
   expect: { timeout: real ? 180_000 : 10_000 },
-  outputDir: "/tmp/two-model-loop-qa-playwright",
+  outputDir: "/tmp/kontur-playwright",
   webServer: {
     command: "npm run build && node --import tsx tests/support/e2e-server.ts",
     cwd: fileURLToPath(new URL("../../", import.meta.url)),

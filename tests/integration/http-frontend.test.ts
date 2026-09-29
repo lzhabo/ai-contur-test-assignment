@@ -47,8 +47,6 @@ async function serve(root: string): Promise<string> {
 }
 
 it("отдаёт ресурсы с верным MIME и страницу приложения для клиентских маршрутов", async () => {
-  // Проверяет сценарий: отдаёт ресурсы с верным MIME и страницу приложения для клиентских маршрутов.
-
   const root = await mkdtemp(join(tmpdir(), "loop-dist-"));
   roots.push(root);
   await writeFile(join(root, "index.html"), "<main>app</main>");
@@ -80,8 +78,6 @@ it("отдаёт ресурсы с верным MIME и страницу при�
 });
 
 it("возвращает 503, если сборка интерфейса отсутствует", async () => {
-  // Проверяет сценарий: возвращает 503, если сборка интерфейса отсутствует.
-
   const root = await mkdtemp(join(tmpdir(), "loop-no-dist-"));
   roots.push(root);
   const base = await serve(root);
@@ -92,8 +88,6 @@ it("возвращает 503, если сборка интерфейса отс�
 });
 
 it("не читает ресурс по символической ссылке за пределы dist", async () => {
-  // Проверяет сценарий: не читает ресурс по символической ссылке за пределы dist.
-
   const root = await mkdtemp(join(tmpdir(), "loop-dist-link-"));
   roots.push(root);
   const dist = join(root, "dist");
@@ -109,8 +103,6 @@ it("не читает ресурс по символической ссылке 
 });
 
 it("не читает index по символической ссылке за пределы dist", async () => {
-  // Проверяет сценарий: не читает index по символической ссылке за пределы dist.
-
   const root = await mkdtemp(join(tmpdir(), "loop-index-link-"));
   roots.push(root);
   const dist = join(root, "dist");

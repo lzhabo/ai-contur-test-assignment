@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { join } from "node:path";
 import {
   TaskSnapshotResponseSchema,
   type TaskListResponse,
@@ -52,7 +53,7 @@ export function createTaskView(runtime: TaskRuntime): TaskView {
     }
   }
 
-  /** Собирает состояние экрана, доступные действия, файлы и историю выбранной задачи. */
+  /** Собирает состояние экрана и историю; путь опубликованного результата привязывает к текущему каталогу данных. */
   async function snapshot(taskId: string): Promise<TaskSnapshotResponse> {
     const loaded = await stateOf(taskId);
     const state = await ensureCompletedIntegrity(taskId, loaded.state);
@@ -141,7 +142,8 @@ export function createTaskView(runtime: TaskRuntime): TaskView {
         maxModelCalls: state.limits.maxModelCalls,
         createdVersions: state.createdVersions,
         maxVersions: state.limits.maxVersions,
-        resultPath: state.resultPath,
+        resultPath:
+          state.resultPath === null ? null : join(runtime.dataDir, "tasks", taskId, "result"),
       },
       actions: {
         canStop: !terminal.has(state.phase),

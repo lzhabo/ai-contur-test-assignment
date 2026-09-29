@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_TASK_CHARS } from "./limits.js";
 
 export const TaskPhaseSchema = z.enum([
   "preparing",
@@ -135,7 +136,9 @@ export const TaskSnapshotResponseSchema = z.object({
 });
 export type TaskSnapshotResponse = z.infer<typeof TaskSnapshotResponseSchema>;
 
-export const CreateTaskRequestSchema = z.object({ text: z.string().trim().min(1).max(8000) });
+export const CreateTaskRequestSchema = z.object({
+  text: z.string().trim().min(1).max(MAX_TASK_CHARS),
+});
 export type CreateTaskRequest = z.infer<typeof CreateTaskRequestSchema>;
 export const CreateTaskResponseSchema = z.object({ taskId: z.string().min(1) });
 export type CreateTaskResponse = z.infer<typeof CreateTaskResponseSchema>;

@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, rename, rm } from "node:fs/promises";
 import path from "node:path";
+import { MAX_ARTIFACT_BYTES } from "../../shared/limits.js";
 import type {
   ArtifactFileContent,
   ArtifactStore,
@@ -19,7 +20,6 @@ import { renderTestArtifact } from "./test-artifact.js";
 
 const names = ["solution.ts", "solution.test.ts"] as const;
 const safeId = /^[A-Za-z0-9_-]{1,100}$/;
-const maxArtifactBytes = 64 * 1024;
 
 /** Вычисляет SHA-256 точных байтов для проверки неизменности файла. */
 function sha256(data: string | Uint8Array): string {
@@ -151,7 +151,7 @@ export class LocalArtifactStore implements ArtifactStore {
         sum + Buffer.byteLength(value),
       0,
     );
-    if (totalBytes > maxArtifactBytes) throw new Error("Artifact size limit exceeded");
+    if (totalBytes > MAX_ARTIFACT_BYTES) throw new Error("Artifact size limit exceeded");
     await this.ensureTask(taskId);
     const revisions = path.join(this.taskRoot(taskId), "revisions");
     await ensureDir(revisions);
@@ -186,22 +186,6 @@ export class LocalArtifactStore implements ArtifactStore {
     await requireDirectory(path.join(this.taskRoot(ref.taskId), "revisions"));
     const disk = await this.readManifest(this.versionDir(ref.taskId, ref.versionId));
     if (!sameRef(disk, ref)) throw new Error("Artifact reference mismatch");
-  }
-  /** Создаёт проверенную рабочую копию версии или возвращает уже существующую. */
-  async prepareWorkingCopy(ref: ArtifactRef): Promise<string> {
-    await this.verifyVersion(ref);
-    const work = path.join(this.taskRoot(ref.taskId), "work");
-    await ensureDir(work);
-    const target = path.join(work, id(ref.versionId));
-    try {
-      const existing = await this.readManifest(target);
-      if (!sameRef(existing, ref)) throw new Error("Working copy conflict");
-      return target;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    await this.copyVersion(ref, target);
-    return target;
   }
   /** Копирует проверенные файлы через временный каталог и атомарно публикует копию. */
   private async copyVersion(ref: ArtifactRef, target: string): Promise<void> {

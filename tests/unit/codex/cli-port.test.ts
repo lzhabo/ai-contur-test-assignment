@@ -46,7 +46,54 @@ const answer = {
 const transportAnswer = answer;
 
 describe("взаимодействие с Codex CLI", () => {
-  // Объединяет проверки: взаимодействие с Codex CLI.
+  it.each([
+    { role: "author", modelId: "gpt-6-luna", expectedOutputKind: "candidate", output: answer },
+    {
+      role: "reviewer",
+      modelId: "gpt-6-sol",
+      expectedOutputKind: "review",
+      output: { kind: "review", verdict: "approved", findings: [] },
+    },
+  ] as const)("передаёт модель $modelId для роли $role", async (assignment) => {
+    const { binary, root } = await mockCli(
+      // Сохраняет фактические аргументы CLI и возвращает ответ выбранной роли.
+      (root) => `
+        require('node:fs').writeFileSync(${JSON.stringify(path.join(root, "args.json"))}, JSON.stringify(process.argv.slice(2)));
+        console.log(JSON.stringify({type:'turn.started'}));
+        console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:${JSON.stringify(JSON.stringify(assignment.output))}}}));
+        console.log(JSON.stringify({type:'turn.completed'}));
+      `,
+    );
+
+    const result = await new CodexCliPort(binary).run(
+      { ...request, ...assignment },
+      {
+        signal: new AbortController().signal,
+        // Наблюдения процесса не влияют на проверку выбора модели.
+        onObservation: async () => {},
+      },
+    );
+    const args = JSON.parse(await readFile(path.join(root, "args.json"), "utf8")) as string[];
+
+    expect(args[args.indexOf("--model") + 1]).toBe(assignment.modelId);
+    expect(result.modelId).toBe(assignment.modelId);
+    expect(result.output).toEqual(assignment.output);
+  });
+
+  it("отклоняет неизвестную модель до запуска CLI", async () => {
+    const cli = new CodexCliPort("/missing-kontur-codex");
+
+    await expect(
+      cli.run(
+        { ...request, modelId: "unsupported-model" },
+        {
+          signal: new AbortController().signal,
+          // Валидация должна завершиться до первого наблюдения процесса.
+          onObservation: async () => {},
+        },
+      ),
+    ).rejects.toThrow("Unsupported model ID: unsupported-model");
+  });
 
   it("принимает один структурированный результат после прогресса и передаёт флаги запрета инструментов", async () => {
     // Сверяет флаги запуска и схему, проверяет структурированный результат и наличие сообщения о прогрессе.
@@ -91,8 +138,6 @@ describe("взаимодействие с Codex CLI", () => {
   });
 
   it("принимает вложенные объекты и массивы в тестовых случаях JSON", async () => {
-    // Проверяет сценарий: принимает вложенные объекты и массивы в тестовых случаях JSON.
-
     const nested = {
       kind: "candidate",
       functionName: "scan",
@@ -117,17 +162,13 @@ describe("взаимодействие с Codex CLI", () => {
     );
     const result = await new CodexCliPort(binary).run(request, {
       signal: new AbortController().signal,
-      onObservation: async () => {
-        // Оставляет необязательный callback пустым.
-      },
+      onObservation: async () => {},
     });
 
     expect(result.output).toEqual(nested);
   });
 
   it("отклоняет ответ при событии запуска инструмента", async () => {
-    // Проверяет сценарий: отклоняет ответ при событии запуска инструмента.
-
     const { binary } = await mockCli(
       `console.log(JSON.stringify({type:'turn.started'})); console.log(JSON.stringify({type:'item.started',item:{type:'command_execution',command:'cat /secret'}})); setInterval(()=>{},1000);`,
     );
@@ -135,16 +176,12 @@ describe("взаимодействие с Codex CLI", () => {
     await expect(
       new CodexCliPort(binary).run(request, {
         signal: new AbortController().signal,
-        onObservation: async () => {
-          // Оставляет необязательный callback пустым.
-        },
+        onObservation: async () => {},
       }),
     ).rejects.toThrow(/Unexpected Codex event/);
   });
 
   it("собирает символ UTF-8, разделённый между порциями stdout", async () => {
-    // Проверяет сценарий: собирает символ UTF-8, разделённый между порциями stdout.
-
     const unicode = {
       ...transportAnswer,
       solutionTs: `${transportAnswer.solutionTs} // мяу`,
@@ -159,17 +196,13 @@ describe("взаимодействие с Codex CLI", () => {
     `);
     const result = await new CodexCliPort(binary).run(request, {
       signal: new AbortController().signal,
-      onObservation: async () => {
-        // Оставляет необязательный callback пустым.
-      },
+      onObservation: async () => {},
     });
 
     expect(result.output.kind === "candidate" && result.output.solutionTs).toContain("мяу");
   });
 
   it("отменяет зависший CLI и его дочерний процесс", async () => {
-    // Проверяет сценарий: отменяет зависший CLI и его дочерний процесс.
-
     const { binary, root } = await mockCli(
       /* Готовит зависший mock CLI с дочерним процессом sleep. */ (root) => `
       const child = require('node:child_process').spawn('sleep',['60'],{stdio:'ignore'});

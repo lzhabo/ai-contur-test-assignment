@@ -30,7 +30,37 @@ const candidate = {
 };
 
 describe("неизменяемые версии файлов", () => {
-  // Объединяет проверки: неизменяемые версии файлов.
+  it("сохраняет ровно 64 КиБ исходника и тестов, но отклоняет лишний байт", async () => {
+    const { root, artifacts } = await store();
+    const initial = await artifacts.writeVersion({ taskId: "task_limit", candidate });
+    const initialBytes = initial.files[0]!.bytes + initial.files[1]!.bytes;
+    const remaining = 65_536 - initialBytes - Buffer.byteLength("\n//");
+    // Кириллица отличает ограничение байтов от ограничения длины JavaScript-строки.
+    const boundaryCandidate = {
+      ...candidate,
+      solutionTs: `${candidate.solutionTs}\n//${"я".repeat(Math.floor(remaining / 2))}${" ".repeat(remaining % 2)}`,
+    };
+
+    const boundary = await artifacts.writeVersion({
+      taskId: "task_limit",
+      candidate: boundaryCandidate,
+    });
+
+    expect(boundary.files[0]!.bytes + boundary.files[1]!.bytes).toBe(65_536);
+    expect(
+      await readFile(
+        path.join(root, "tasks", "task_limit", "revisions", boundary.versionId, "solution.ts"),
+        "utf8",
+      ),
+    ).toBe(boundaryCandidate.solutionTs);
+
+    await expect(
+      artifacts.writeVersion({
+        taskId: "task_limit",
+        candidate: { ...boundaryCandidate, solutionTs: `${boundaryCandidate.solutionTs} ` },
+      }),
+    ).rejects.toThrow("Artifact size limit exceeded");
+  });
 
   it("публикует подтверждённые байты однократно и возвращает совпадающий ZIP", async () => {
     // Публикует точную версию дважды, сверяет архив и запускает экспортированные тесты.
@@ -83,16 +113,11 @@ describe("неизменяемые версии файлов", () => {
     expect(
       ts
         .getPreEmitDiagnostics(program)
-        .map(
-          /* Извлекает поле, сохраняя порядок записей. */ (diagnostic) =>
-            ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
-        ),
+        .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n")),
     ).toEqual([]);
   }, 15_000); // Includes a separate Node test process and a full TypeScript program.
 
   it("отклоняет устаревшее решение, подмену файла, обход пути и ссылки", async () => {
-    // Проверяет сценарий: отклоняет устаревшее решение, подмену файла, обход пути и ссылки.
-
     const { root, artifacts } = await store();
     const ref = await artifacts.writeVersion({ taskId: "task_1", candidate });
     const approval = {
@@ -123,8 +148,6 @@ describe("неизменяемые версии файлов", () => {
   });
 
   it("отклоняет чтение каталога версий через символическую ссылку", async () => {
-    // Проверяет сценарий: отклоняет чтение каталога версий через символическую ссылку.
-
     const { root, artifacts } = await store();
     const ref = await artifacts.writeVersion({ taskId: "task_1", candidate });
     const revisions = path.join(root, "tasks", "task_1", "revisions");

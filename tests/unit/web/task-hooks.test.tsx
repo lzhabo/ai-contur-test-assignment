@@ -60,17 +60,13 @@ it("смена задачи отменяет старый запрос и не �
   const first = deferred<TaskSnapshotResponse>();
   let firstSignal: AbortSignal | undefined;
   vi.spyOn(api, "getTaskSnapshot").mockImplementation((id, signal) => {
-    // Подставляет управляемый ответ внешней границы для данного сценария.
-
     if (id === "first") {
       firstSignal = signal;
       return first.promise;
     }
     return Promise.resolve(taskResponse("second", 2));
   });
-  vi.spyOn(events, "subscribeTaskEvents").mockReturnValue(() => {
-    // Оставляет необязательный callback пустым.
-  });
+  vi.spyOn(events, "subscribeTaskEvents").mockReturnValue(() => {});
   const { wrapper } = harness();
   const { result, rerender } = renderHook(
     /* Запускает проверяемый hook внутри изолированного провайдера кеша. */ ({ id }) => useTask(id),
@@ -95,15 +91,11 @@ it("смена задачи отменяет старый запрос и не �
 
 // Смена выбранной задачи освобождает её SSE-подписку, а размонтирование — новую.
 it("смена задачи и размонтирование закрывают принадлежащие им SSE-подписки", async () => {
-  vi.spyOn(api, "getTaskSnapshot").mockImplementation(
-    /* Подставляет управляемый ответ внешней границы для данного сценария. */ (id) =>
-      Promise.resolve(taskResponse(id, 1)),
-  );
+  vi.spyOn(api, "getTaskSnapshot").mockImplementation((id) => Promise.resolve(taskResponse(id, 1)));
   const closedFirst = vi.fn();
   const closedSecond = vi.fn();
-  vi.spyOn(events, "subscribeTaskEvents").mockImplementation(
-    /* Подставляет управляемый ответ внешней границы для данного сценария. */ (id) =>
-      id === "first" ? closedFirst : closedSecond,
+  vi.spyOn(events, "subscribeTaskEvents").mockImplementation((id) =>
+    id === "first" ? closedFirst : closedSecond,
   );
   const { wrapper } = harness();
   const { rerender, unmount } = renderHook(
@@ -133,11 +125,8 @@ it("переподключение SSE обновляет данные, а па�
   const load = vi.spyOn(api, "getTaskSnapshot").mockResolvedValue(taskResponse("task", 1));
   let handlers!: Parameters<typeof events.subscribeTaskEvents>[2];
   vi.spyOn(events, "subscribeTaskEvents").mockImplementation((_id, _cursor, received) => {
-    // Подставляет управляемый ответ внешней границы для данного сценария.
     handlers = received;
-    return () => {
-      // Оставляет необязательный callback пустым.
-    };
+    return () => {};
   });
   const { wrapper } = harness();
   const { result } = renderHook(

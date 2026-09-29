@@ -37,8 +37,6 @@ async function run(solutionTs: string, expected: JsonValue = 5) {
 }
 
 describe("изолированное выполнение TypeScript", () => {
-  // Объединяет проверки: изолированное выполнение TypeScript.
-
   it("проверяет типы и сравнивает результаты JSON", async () => {
     // Выполняет корректную функцию сложения и проверяет успешную компиляцию и сравнение результата.
     const result = await run("export function add(a: number, b: number): number { return a + b; }");
@@ -49,8 +47,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("сообщает ошибки типов без выполнения исходника", async () => {
-    // Проверяет сценарий: сообщает ошибки типов без выполнения исходника.
-
     const result = await run(
       "export function add(a: number, b: number): number { return 'wrong'; }",
     );
@@ -60,8 +56,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("запрещает импорт модулей хоста", async () => {
-    // Проверяет сценарий: запрещает импорт модулей хоста.
-
     const result = await run(
       "import { readFileSync } from 'node:fs'; export function add() { return readFileSync('/tmp/x', 'utf8'); }",
     );
@@ -71,8 +65,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("запрещает внешние ссылки типов до чтения компилятором", async () => {
-    // Проверяет сценарий: запрещает внешние ссылки типов до чтения компилятором.
-
     const result = await run(
       "/// <reference path='/tmp/external-secret.d.ts' />\nexport function add(a: number, b: number) { return a + b; }",
     );
@@ -82,8 +74,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("запрещает изменение входа даже при верном результате", async () => {
-    // Проверяет сценарий: запрещает изменение входа даже при верном результате.
-
     const root = await mkdtemp(path.join(os.tmpdir(), "check-test-"));
     roots.push(root);
     const store = new LocalArtifactStore(root);
@@ -109,8 +99,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("прерывает бесконечный цикл", async () => {
-    // Проверяет сценарий: прерывает бесконечный цикл.
-
     const result = await run(
       "export function add(a: number, b: number): number { while (true) {} }",
     );
@@ -119,8 +107,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("не доверяет замене JSON.stringify и глобальных объектов проверки", async () => {
-    // Проверяет сценарий: не доверяет замене JSON.stringify и глобальных объектов проверки.
-
     const result = await run(`export function add(a: number, b: number): number {
       JSON.stringify = (() => '5') as typeof JSON.stringify;
       (globalThis as any).__result = 5;
@@ -134,8 +120,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("не вызывает toJSON и геттеры проверяемого кода для сравнения результата", async () => {
-    // Проверяет сценарий: не вызывает toJSON и геттеры проверяемого кода для сравнения результата.
-
     for (const source of [
       "export function add(): any { return { toJSON() { return 5; } }; }",
       "export function add(): any { return { get value() { while (true) {} } }; }",
@@ -149,8 +133,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("отклоняет Proxy, скрывающий реальное возвращаемое значение", async () => {
-    // Проверяет сценарий: отклоняет Proxy, скрывающий реальное возвращаемое значение.
-
     const result = await run(
       "export function add(): any { return new Proxy({ value: 999 }, { getOwnPropertyDescriptor() { return { value: 5, enumerable: true, configurable: true, writable: true }; } }); }",
       { value: 5 },
@@ -162,8 +144,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("считает циклический результат ошибкой JSON", async () => {
-    // Проверяет сценарий: считает циклический результат ошибкой JSON.
-
     const result = await run(
       "export function add(a: number, b: number): any { const x: any = {}; x.self = x; return x; }",
     );
@@ -173,8 +153,6 @@ describe("изолированное выполнение TypeScript", () => {
   });
 
   it("останавливает чрезмерное выделение памяти в QuickJS", async () => {
-    // Проверяет сценарий: останавливает чрезмерное выделение памяти в QuickJS.
-
     const result = await run(
       "export function add(a: number, b: number): number[] { return new Array(100_000_000).fill(1); }",
     );

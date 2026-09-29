@@ -26,7 +26,7 @@ afterEach(async () => {
 });
 // Создаёт временный каталог данных и запоминает его для очистки.
 async function root() {
-  const directory = await mkdtemp(path.join(tmpdir(), "loop-qa-service-process-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "kontur-qa-service-process-"));
   roots.push(directory);
   return directory;
 }
@@ -68,8 +68,6 @@ function launch(directory: string, mode: string) {
   return { child, result };
 }
 it("A-04: авария во время вызова восстанавливается как неизвестный исход без скрытого повтора", async () => {
-  // Проверяет сценарий: A-04: авария во время вызова восстанавливается как неизвестный исход без скрытого повтора.
-
   const directory = await root();
   const original = launch(directory, "hang");
   const started = await original.result;
@@ -93,8 +91,6 @@ it("A-04: авария во время вызова восстанавливае
 }, 15000);
 
 it("только один конкурирующий процесс получает блокировку после гибели владельца", async () => {
-  // Проверяет сценарий: только один конкурирующий процесс получает блокировку после гибели владельца.
-
   const directory = await root();
   const owner = launch(directory, "idle");
 
@@ -107,7 +103,5 @@ it("только один конкурирующий процесс получа
   const b = launch(directory, "idle");
   const outcomes = await Promise.all([a.result, b.result]);
 
-  expect(
-    outcomes.map(/* Извлекает поле, сохраняя порядок записей. */ (value) => value.event).sort(),
-  ).toEqual(["ready", "rejected"]);
+  expect(outcomes.map((value) => value.event).sort()).toEqual(["ready", "rejected"]);
 }, 15000);

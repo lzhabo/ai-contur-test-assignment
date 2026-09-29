@@ -7,7 +7,7 @@ import type { TaskEventInput } from "../../src/server/tasks/ports.js";
 const roots: string[] = [];
 // Создаёт изолированные ресурсы сценария и регистрирует их для последующей очистки.
 async function setup() {
-  const root = await mkdtemp(path.join(tmpdir(), "loop-qa-events-"));
+  const root = await mkdtemp(path.join(tmpdir(), "kontur-qa-events-"));
   roots.push(root);
   return root;
 }
@@ -35,8 +35,6 @@ function event(eventId: string): TaskEventInput {
   };
 }
 it("после переподключения возвращает только пропущенные события без дубликатов", async () => {
-  // Проверяет сценарий: после переподключения возвращает только пропущенные события без дубликатов.
-
   const root = await setup();
   const journal = new EventJournal(root);
   const first = await journal.append(event("first"));
@@ -50,8 +48,6 @@ it("после переподключения возвращает только 
   expect(await reopened.readAfter("qa-events", second.sequence)).toEqual([]);
 });
 it("восстанавливает оборванную последнюю запись и продолжает журнал после перезапуска", async () => {
-  // Проверяет сценарий: восстанавливает оборванную последнюю запись и продолжает журнал после перезапуска.
-
   const root = await setup();
   const first = await new EventJournal(root).append(event("first"));
   await appendFile(path.join(root, "tasks/qa-events/events.jsonl"), '{"eventId":"torn');
@@ -66,8 +62,6 @@ it("восстанавливает оборванную последнюю за�
 });
 
 it("не читает и не обрезает журнал по ссылке за пределы каталога задачи", async () => {
-  // Проверяет сценарий: не читает и не обрезает журнал по ссылке за пределы каталога задачи.
-
   const root = await setup();
   const journal = new EventJournal(root);
   await journal.append(event("first"));
@@ -84,8 +78,6 @@ it("не читает и не обрезает журнал по ссылке з
 });
 
 it("не читает и не дописывает журнал через ссылку вместо каталога задачи", async () => {
-  // Проверяет сценарий: не читает и не дописывает журнал через ссылку вместо каталога задачи.
-
   const root = await setup();
   const journal = new EventJournal(root);
   await journal.append(event("first"));

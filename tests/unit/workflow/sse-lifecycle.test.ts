@@ -55,8 +55,6 @@ async function paused(
 }
 
 it("сразу открывает пустой SSE и закрывает его вместе с сервером, освобождая блокировку", async () => {
-  // Проверяет сценарий: сразу открывает пустой SSE и закрывает его вместе с сервером, освобождая блокировку.
-
   const root = await mkdtemp(join(tmpdir(), "loop-sse-close-"));
   roots.push(root);
   const artifacts = new LocalArtifactStore(root);
@@ -121,8 +119,6 @@ it("сразу открывает пустой SSE и закрывает его 
 }, 10_000);
 
 it("SIGTERM завершает сервер с пустым SSE и освобождает блокировку данных", async () => {
-  // Проверяет сценарий: SIGTERM завершает сервер с пустым SSE и освобождает блокировку данных.
-
   const root = await mkdtemp(join(tmpdir(), "loop-sse-signal-"));
   roots.push(root);
   const socket = createServer();
@@ -233,8 +229,6 @@ it("SIGTERM завершает сервер с пустым SSE и освобо�
 }, 15_000);
 
 it("освобождает блокировку данных при занятом HTTP-порте", async () => {
-  // Проверяет сценарий: освобождает блокировку данных при занятом HTTP-порте.
-
   const root = await mkdtemp(join(tmpdir(), "loop-listen-fail-"));
   roots.push(root);
   const socket = createServer();

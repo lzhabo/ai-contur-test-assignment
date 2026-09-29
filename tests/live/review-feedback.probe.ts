@@ -32,10 +32,7 @@ const mockedIncorrectCandidate = AuthorOutputSchema.parse({
   cases: weak.selfTests,
 });
 const boundaryCases = fixture.cases
-  .filter(
-    /* Отбирает записи проверяемого вида. */ (testCase) =>
-      ["unsorted-disjoint", "overlap", "touching"].includes(testCase.name),
-  )
+  .filter((testCase) => ["unsorted-disjoint", "overlap", "touching"].includes(testCase.name))
   .map(
     /* Проверяет весь независимый тестовый случай по схеме. */ (testCase) =>
       TestCaseSchema.parse(testCase),
@@ -162,18 +159,12 @@ try {
   const firstReview = calls.find(
     /* Находит запись проверяемого этапа или события. */ (call) => call.role === "reviewer",
   );
-  const secondReview = calls.filter(
-    /* Отбирает записи проверяемого вида. */ (call) => call.role === "reviewer",
-  )[1];
+  const secondReview = calls.filter((call) => call.role === "reviewer")[1];
   const versions = snapshot.events
-    .filter(/* Отбирает записи проверяемого вида. */ (event) => event.type === "version_created")
-    .map(/* Извлекает поле, сохраняя порядок записей. */ (event) => event.artifactVersionId);
-  const reviews = snapshot.events.filter(
-    /* Отбирает записи проверяемого вида. */ (event) => event.type === "review_finished",
-  );
-  const checkEvents = snapshot.events.filter(
-    /* Отбирает записи проверяемого вида. */ (event) => event.type === "checks_finished",
-  );
+    .filter((event) => event.type === "version_created")
+    .map((event) => event.artifactVersionId);
+  const reviews = snapshot.events.filter((event) => event.type === "review_finished");
+  const checkEvents = snapshot.events.filter((event) => event.type === "checks_finished");
   const solutionFile = snapshot.files.find(
     /* Находит запись проверяемого этапа или события. */ (file) => file.path === "solution.ts",
   );
@@ -200,19 +191,13 @@ try {
     secondAuthorSawReview,
     createdVersions: snapshot.state.createdVersions,
     usedModelCalls: snapshot.state.usedModelCalls,
-    actualCloudCalls: calls.filter(
-      /* Отбирает записи проверяемого вида. */ (call) => call.source === "codex-cli",
-    ).length,
+    actualCloudCalls: calls.filter((call) => call.source === "codex-cli").length,
     versions,
-    reviewVersionIds: reviews.map(
-      /* Извлекает поле, сохраняя порядок записей. */ (event) => event.artifactVersionId,
-    ),
-    checkEvents: checkEvents.map(
-      /* Извлекает поле, сохраняя порядок записей. */ (event) => ({
-        versionId: event.artifactVersionId,
-        text: event.text,
-      }),
-    ),
+    reviewVersionIds: reviews.map((event) => event.artifactVersionId),
+    checkEvents: checkEvents.map((event) => ({
+      versionId: event.artifactVersionId,
+      text: event.text,
+    })),
     currentVersionId: snapshot.state.currentVersionId,
     correctedSourceSha256: correctedSource ? sha256(correctedSource) : null,
     finalIndependentChecks: finalBoundary && {
@@ -228,11 +213,11 @@ try {
   console.log(JSON.stringify(report, null, 2));
 
   assert.deepEqual(
-    calls.map(/* Извлекает поле, сохраняя порядок записей. */ (call) => call.role),
+    calls.map((call) => call.role),
     ["author", "reviewer", "author", "reviewer"],
   );
   assert.deepEqual(
-    calls.map(/* Извлекает поле, сохраняя порядок записей. */ (call) => call.source),
+    calls.map((call) => call.source),
     ["mocked-incorrect-author-version", "codex-cli", "codex-cli", "codex-cli"],
   );
   assert.equal(
@@ -269,13 +254,11 @@ try {
   assert.equal(versions.length, 2);
   assert.notEqual(versions[0], versions[1]);
   assert.deepEqual(
-    reviews.map(/* Извлекает поле, сохраняя порядок записей. */ (event) => event.artifactVersionId),
+    reviews.map((event) => event.artifactVersionId),
     versions,
   );
   assert.deepEqual(
-    checkEvents.map(
-      /* Извлекает поле, сохраняя порядок записей. */ (event) => event.artifactVersionId,
-    ),
+    checkEvents.map((event) => event.artifactVersionId),
     versions,
   );
   assert.ok(

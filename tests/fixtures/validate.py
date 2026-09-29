@@ -1,10 +1,11 @@
-"""Validate fixture data only; never evaluate candidate source."""
+"""Проверяет данные fixtures без выполнения исходного кода функции."""
 import json
 import math
 from pathlib import Path
 
 
 def reject_constant(value):
+    """Отклоняет NaN и Infinity, которые не входят в формат JSON."""
     raise ValueError(f"Non-JSON constant: {value}")
 
 
@@ -13,7 +14,7 @@ data = {
     path.name: json.loads(path.read_text(), parse_constant=reject_constant)
     for path in sorted(root.glob("*.json"))
 }
-assert len(data) == 5
+assert set(data) == {"merge-intervals.json", "weak-self-tests.json"}
 assert all(item["fixtureVersion"] == 1 for item in data.values())
 cases = data["merge-intervals.json"]["cases"]
 names = {case["name"] for case in cases}
@@ -33,19 +34,4 @@ weak = data["weak-self-tests.json"]
 assert set(weak["independentFailureCases"]) <= names
 assert isinstance(weak["source"], str)
 assert len(weak["selfTests"]) == 2
-special = data["merge-intervals-nonfinite.json"]["cases"]
-assert len({case["name"] for case in special}) == 3
-for case in special:
-    replacement = case["replaceInsideRunner"]
-    assert replacement["number"] in ("NaN", "Infinity", "-Infinity")
-    target = case["args"]
-    for index in replacement["path"]:
-        target = target[index]
-    assert type(target) in (int, float) and math.isfinite(target)
-    assert case["expected"] == []
-scenarios = data["agent-scenarios.json"]["scenarios"]
-assert len({scenario["id"] for scenario in scenarios}) == 3
-sentinel = data["context-sentinel.json"]
-assert sentinel["sentinel"] not in sentinel["currentRelevantText"]
-assert sentinel["archiveRecipe"]["minimumArchiveBytes"] > 96 * 1024
-print("PASS: 5 JSON fixtures; 23 merge cases; 3 nonfinite descriptions; source NOT EXECUTED")
+print("PASS: 2 JSON fixtures; 23 independent merge cases; 2 self-tests; source NOT EXECUTED")

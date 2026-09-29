@@ -34,7 +34,7 @@ afterEach(async () => {
 });
 // Создаёт mock-сценарий и сохраняет запросы, ответы и результаты настоящего выполнения проверок.
 async function setup(scenario: MockScenario, overrides: Partial<RuntimeLimits> = {}) {
-  const root = await mkdtemp(path.join(tmpdir(), "loop-qa-demo-"));
+  const root = await mkdtemp(path.join(tmpdir(), "kontur-qa-demo-"));
   roots.push(root);
   const artifacts = new LocalArtifactStore(root);
   const checks = new QuickJsCheckRunner(artifacts);
@@ -94,8 +94,6 @@ async function waitFor(
 it.each(["mergeIntervals", "catify", "shortestPath"])(
   "review_once %s: замоканная версия с намеренной ошибкой получает замечания и заменяется исправленной mock-версией",
   async (functionName) => {
-    // Проверяет сценарий: review_once %s: замоканная версия с намеренной ошибкой получает замечания и заменяется исправленной mock-версией.
-
     const f = await setup("review_once");
     const { taskId } = await f.service.createTask({
       text: `Implement ${functionName}; include boundary cases and do not mutate input.`,
@@ -107,9 +105,7 @@ it.each(["mergeIntervals", "catify", "shortestPath"])(
         value.actions.canDecide,
     );
 
-    expect(
-      f.calls.map(/* Извлекает поле, сохраняя порядок записей. */ (call) => call.role),
-    ).toEqual(["author", "reviewer", "author", "reviewer"]);
+    expect(f.calls.map((call) => call.role)).toEqual(["author", "reviewer", "author", "reviewer"]);
     expect(f.checked).toHaveLength(2);
     expect(f.checked[0]!.compilation.status).toBe("passed");
     expect(f.checked[0]!.tests.status).toBe("failed");
@@ -117,28 +113,18 @@ it.each(["mergeIntervals", "catify", "shortestPath"])(
     expect(f.checked[1]!.compilation.status).toBe("passed");
     expect(f.checked[1]!.tests.status).toBe("passed");
 
-    const candidates = f.outputs.filter(
-      /* Отбирает записи проверяемого вида. */ (output) => output.kind === "candidate",
-    );
+    const candidates = f.outputs.filter((output) => output.kind === "candidate");
 
     expect(candidates).toHaveLength(2);
     expect(candidates[0]!.solutionTs).not.toBe(candidates[1]!.solutionTs);
 
-    const reviews = f.outputs.filter(
-      /* Отбирает записи проверяемого вида. */ (output) => output.kind === "review",
-    );
+    const reviews = f.outputs.filter((output) => output.kind === "review");
 
-    expect(
-      reviews.map(/* Извлекает поле, сохраняя порядок записей. */ (review) => review.verdict),
-    ).toEqual(["changes_requested", "approved"]);
+    expect(reviews.map((review) => review.verdict)).toEqual(["changes_requested", "approved"]);
     expect(reviews[0]!.findings.length).toBeGreaterThan(0);
     expect(paused.state.createdVersions).toBe(2);
     expect(paused.state.usedModelCalls).toBe(4);
-    expect(
-      paused.events.filter(
-        /* Отбирает записи проверяемого вида. */ (event) => event.type === "review_finished",
-      ),
-    ).toHaveLength(2);
+    expect(paused.events.filter((event) => event.type === "review_finished")).toHaveLength(2);
     await expect(access(path.join(f.root, "tasks", taskId, "result"))).rejects.toMatchObject({
       code: "ENOENT",
     });
@@ -147,8 +133,6 @@ it.each(["mergeIntervals", "catify", "shortestPath"])(
 );
 
 it("review_loop останавливается после трёх версий и шести вызовов без публикации", async () => {
-  // Проверяет сценарий: review_loop останавливается после трёх версий и шести вызовов без публикации.
-
   const f = await setup("review_loop");
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
   const stopped = await waitFor(
@@ -160,7 +144,7 @@ it("review_loop останавливается после трёх версий 
 
   expect(stopped.state.createdVersions).toBe(3);
   expect(stopped.state.usedModelCalls).toBe(6);
-  expect(f.calls.map(/* Извлекает поле, сохраняя порядок записей. */ (call) => call.role)).toEqual([
+  expect(f.calls.map((call) => call.role)).toEqual([
     "author",
     "reviewer",
     "author",
@@ -177,8 +161,6 @@ it("review_loop останавливается после трёх версий 
 }, 20000);
 
 it("no_response требует явного повтора и сохраняет общий бюджет после перезапуска", async () => {
-  // Проверяет сценарий: no_response требует явного повтора и сохраняет общий бюджет после перезапуска.
-
   const f = await setup("no_response", {
     maxModelCalls: 2,
     modelTimeoutMs: 40,

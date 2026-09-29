@@ -4,8 +4,6 @@ import { workflowView } from "../../../src/client/workflow/model";
 import { event, snapshot } from "../../support/snapshot.js";
 
 describe("отображение истории работы агентов", () => {
-  // Объединяет проверки: отображение истории работы агентов.
-
   it("сохраняет прежние замечания после одобрения новой версии и удаляет дубликаты SSE", () => {
     // Строит историю без дубликатов и сохраняет замечание первой версии после одобрения второй.
     const first = event(2, "review_finished", {
@@ -33,14 +31,10 @@ describe("отображение истории работы агентов", ()
     const view = workflowView(data);
 
     expect(view.returns).toHaveLength(1);
-    expect(
-      view.reviews.map(/* Извлекает поле, сохраняя порядок записей. */ (review) => review.verdict),
-    ).toEqual(["changes_requested", "approved"]);
+    expect(view.reviews.map((review) => review.verdict)).toEqual(["changes_requested", "approved"]);
     expect(view.versions).toEqual(["v1", "v2"]);
   });
   it("не придумывает замечания, если первая версия одобрена", () => {
-    // Проверяет сценарий: не придумывает замечания, если первая версия одобрена.
-
     const data = snapshot(
       [event(1, "review_finished", { from: "reviewer", to: "user" })],
       "awaiting_approval",
@@ -49,8 +43,6 @@ describe("отображение истории работы агентов", ()
     expect(workflowView(data).returns).toHaveLength(0);
   });
   it("показывает ожидание ревью и не отмечает невыполненные роли завершёнными", () => {
-    // Проверяет сценарий: показывает ожидание ревью и не отмечает невыполненные роли завершёнными.
-
     const data = snapshot(
       [
         event(1, "version_created", {
@@ -81,8 +73,6 @@ describe("отображение истории работы агентов", ()
   it.each(["stopped", "error", "unknown_outcome"] as const)(
     "не показывает работающего агента после %s",
     (phase) => {
-      // Проверяет сценарий: не показывает работающего агента после %s.
-
       const data = snapshot(
         [
           event(1, "attempt_started", { from: "author", attemptId: "attempt" }),
@@ -119,8 +109,6 @@ describe("отображение истории работы агентов", ()
     },
   );
   it("показывает готовые файлы только после события публикации", () => {
-    // Проверяет сценарий: показывает готовые файлы только после события публикации.
-
     const data = snapshot([event(1, "decision_recorded")], "applying");
 
     expect(

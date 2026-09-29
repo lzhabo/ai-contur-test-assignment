@@ -100,7 +100,7 @@ export function createTaskRoutes(service: AppService, activeStreams: Set<Respons
       const zip = await service.getResultZip(request.params.id);
       response
         .type("application/zip")
-        .setHeader("Content-Disposition", "attachment; filename=two-model-result.zip");
+        .setHeader("Content-Disposition", "attachment; filename=kontur-result.zip");
       response.send(Buffer.from(zip));
     },
   );

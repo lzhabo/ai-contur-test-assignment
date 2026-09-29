@@ -1,7 +1,10 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, it } from "vitest";
-import { createAppService } from "../../src/server/tasks/service.js";
+import { unzipSync } from "fflate";
+import { createAppService, type AppService } from "../../src/server/tasks/service.js";
+import { LocalArtifactStore } from "../../src/server/storage/local-store.js";
+import { QuickJsCheckRunner } from "../../src/server/code-runner/quickjs-runner.js";
 import type { DecisionRequest, TaskSnapshotResponse } from "../../src/shared/api.js";
 import { setupService as setup, waitForTask as until, services } from "../support/service.js";
 
@@ -14,9 +17,52 @@ function decision(value: TaskSnapshotResponse): DecisionRequest {
     manifestHash: value.state.currentManifestHash!,
   };
 }
-it("A-08: устаревший хеш подтверждения отклоняется без публикации", async () => {
-  // Проверяет сценарий: A-08: устаревший хеш подтверждения отклоняется без публикации.
 
+it("перенос каталога сохраняет опубликованные файлы и обновляет путь результата", async () => {
+  const f = await setup();
+  const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
+  const paused = await until(f.service, taskId, (value) => value.actions.canDecide);
+
+  expect(paused.state.resultPath).toBeNull();
+
+  await f.service.decide(taskId, decision(paused));
+  const completed = await until(f.service, taskId, (value) => value.task.phase === "completed");
+  const originalZip = unzipSync(await f.service.getResultZip(taskId));
+  await f.service.close();
+  services.splice(services.indexOf(f.service), 1);
+  const movedRoot = `${f.root}-moved`;
+  let restarted: AppService | undefined;
+
+  try {
+    await rename(f.root, movedRoot);
+    const artifacts = new LocalArtifactStore(movedRoot);
+    restarted = await createAppService({
+      ...f.options,
+      dataDir: movedRoot,
+      ports: { ...f.options.ports, artifacts, checks: new QuickJsCheckRunner(artifacts) },
+    });
+    const restored = await restarted.getTask(taskId);
+    const restoredZip = unzipSync(await restarted.getResultZip(taskId));
+
+    expect(restored.task.phase).toBe("completed");
+    expect(restored.state.resultPath).toBe(path.join(movedRoot, "tasks", taskId, "result"));
+    expect(restored.state.resultPath).not.toBe(completed.state.resultPath);
+    expect(restored.state.currentManifestHash).toBe(completed.state.currentManifestHash);
+    expect(restoredZip).toEqual(originalZip);
+    for (const file of restored.files) {
+      const downloaded = await restarted.getFile(taskId, file.artifactId);
+      const onDisk = await readFile(path.join(restored.state.resultPath!, file.path), "utf8");
+
+      expect(downloaded.content).toBe(Buffer.from(originalZip[file.path]!).toString("utf8"));
+      expect(onDisk).toBe(downloaded.content);
+    }
+  } finally {
+    await restarted?.close();
+    await rm(movedRoot, { recursive: true, force: true });
+  }
+}, 15_000);
+
+it("A-08: устаревший хеш подтверждения отклоняется без публикации", async () => {
   const f = await setup();
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" }, "qa-create");
   const paused = await until(
@@ -39,8 +85,6 @@ it("A-08: устаревший хеш подтверждения отклоня�
 }, 15000);
 
 it("A-08: одновременное повторное подтверждение публикует ровно один раз", async () => {
-  // Проверяет сценарий: A-08: одновременное повторное подтверждение публикует ровно один раз.
-
   const f = await setup();
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
   const paused = await until(
@@ -64,8 +108,6 @@ it("A-08: одновременное повторное подтверждени
 }, 15000);
 
 it("A-08: повтор подтверждения готовой задачи сохраняет результат без нового вызова", async () => {
-  // Проверяет сценарий: A-08: повтор подтверждения готовой задачи сохраняет результат без нового вызова.
-
   const f = await setup();
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
   const paused = await until(
@@ -90,8 +132,6 @@ it("A-08: повтор подтверждения готовой задачи с
 }, 15000);
 
 it("A-09: одновременные создания с одним ключом возвращают одну задачу", async () => {
-  // Проверяет сценарий: A-09: одновременные создания с одним ключом возвращают одну задачу.
-
   const f = await setup("slow");
 
   const results = await Promise.all([
@@ -106,8 +146,6 @@ it("A-09: одновременные создания с одним ключом
 }, 15000);
 
 it("A-09: разные одновременные запросы не запускают две активные задачи", async () => {
-  // Проверяет сценарий: A-09: разные одновременные запросы не запускают две активные задачи.
-
   const f = await setup("slow");
 
   const results = await Promise.allSettled([
@@ -124,8 +162,6 @@ it("A-09: разные одновременные запросы не запус
 }, 15000);
 
 it("A-03/A-04: неизвестный исход сохраняется после перезапуска без скрытого повтора", async () => {
-  // Проверяет сценарий: A-03/A-04: неизвестный исход сохраняется после перезапуска без скрытого повтора.
-
   const f = await setup("no_response");
 
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
@@ -162,8 +198,6 @@ it("A-03/A-04: неизвестный исход сохраняется посл
 }, 15000);
 
 it("A-10: перезапуск выявляет изменённый результат и не показывает его готовым", async () => {
-  // Проверяет сценарий: A-10: перезапуск выявляет изменённый результат и не показывает его готовым.
-
   const f = await setup();
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
   const paused = await until(
@@ -192,8 +226,6 @@ it("A-10: перезапуск выявляет изменённый резул�
 }, 15000);
 
 it("A-08: победившая остановка запрещает публикацию при одновременном подтверждении", async () => {
-  // Проверяет сценарий: A-08: победившая остановка запрещает публикацию при одновременном подтверждении.
-
   const f = await setup("slow");
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
   const paused = await until(

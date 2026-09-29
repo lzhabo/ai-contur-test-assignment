@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 // Сохраняет переданный код и тестовые случаи во временной версии и выполняет их настоящим QuickJS.
 async function run(candidate: AuthorOutput) {
-  const root = await mkdtemp(path.join(tmpdir(), "loop-qa-checks-"));
+  const root = await mkdtemp(path.join(tmpdir(), "kontur-qa-checks-"));
   roots.push(root);
   const store = new LocalArtifactStore(root);
   const ref = await store.writeVersion({ taskId: "qa-checks", candidate });
@@ -31,8 +31,6 @@ async function run(candidate: AuthorOutput) {
   });
 }
 it("независимые граничные случаи находят ошибку, пропущенную тестами автора", async () => {
-  // Проверяет сценарий: независимые граничные случаи находят ошибку, пропущенную тестами автора.
-
   const weak = JSON.parse(
     await readFile(new URL("../fixtures/weak-self-tests.json", import.meta.url), "utf8"),
   );
@@ -51,10 +49,7 @@ it("независимые граничные случаи находят оши
   expect(self.tests.status).toBe("passed");
 
   const independentCases = fixture.cases
-    .filter(
-      /* Отбирает записи проверяемого вида. */ (item: { name: string }) =>
-        weak.independentFailureCases.includes(item.name),
-    )
+    .filter((item: { name: string }) => weak.independentFailureCases.includes(item.name))
     .map(
       /* Проверяет весь граничный тестовый случай по схеме. */ (item: unknown) =>
         TestCaseSchema.parse(item),
@@ -67,8 +62,6 @@ it("независимые граничные случаи находят оши
 }, 15000);
 
 it("выполняет синхронный TypeScript и сообщает ошибки компиляции", async () => {
-  // Проверяет сценарий: выполняет синхронный TypeScript и сообщает ошибки компиляции.
-
   const good = await run({
     kind: "candidate",
     functionName: "double",
@@ -95,9 +88,7 @@ it("выполняет синхронный TypeScript и сообщает ош�
 }, 15000);
 
 it("отклоняет внешние ссылки TypeScript до чтения файлов компилятором", async () => {
-  // Проверяет сценарий: отклоняет внешние ссылки TypeScript до чтения файлов компилятором.
-
-  const externalRoot = await mkdtemp(path.join(tmpdir(), "loop-qa-compiler-outside-"));
+  const externalRoot = await mkdtemp(path.join(tmpdir(), "kontur-qa-compiler-outside-"));
   roots.push(externalRoot);
   const secretType = "QA_EXTERNAL_FILE_SENTINEL_54127";
   const externalFile = path.join(externalRoot, "outside.d.ts");
@@ -114,8 +105,6 @@ it("отклоняет внешние ссылки TypeScript до чтения 
 }, 10000);
 
 it("отклоняет изменение входных данных при правильном результате", async () => {
-  // Проверяет сценарий: отклоняет изменение входных данных при правильном результате.
-
   const result = await run({
     kind: "candidate",
     functionName: "sortCopy",

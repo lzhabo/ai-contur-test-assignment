@@ -62,8 +62,6 @@ async function paused(
 }
 
 it("сервер в mock-режиме не подтверждает и не запускает сохранённую задачу режима real", async () => {
-  // Проверяет сценарий: сервер в mock-режиме не подтверждает и не запускает сохранённую задачу режима real.
-
   const root = await mkdtemp(join(tmpdir(), "loop-mode-"));
   roots.push(root);
   const first = await setup("real", root);
@@ -100,8 +98,6 @@ it("сервер в mock-режиме не подтверждает и не за
 });
 
 it("сервер в mock-режиме не запускает ожидающий узел задачи режима real", async () => {
-  // Проверяет сценарий: сервер в mock-режиме не запускает ожидающий узел задачи режима real.
-
   const root = await mkdtemp(join(tmpdir(), "loop-mode-pending-"));
   roots.push(root);
   const first = await setup("real", root);
@@ -170,8 +166,6 @@ it("сервер в mock-режиме не запускает ожидающий
 });
 
 it("восстанавливает опубликованный результат после сбоя перед сохранением состояния применения", async () => {
-  // Проверяет сценарий: восстанавливает опубликованный результат после сбоя перед сохранением состояния применения.
-
   const root = await mkdtemp(join(tmpdir(), "loop-publish-recover-"));
   roots.push(root);
   const first = await setup("mock", root);
@@ -246,8 +240,6 @@ it("восстанавливает опубликованный результа
 });
 
 it("отклоняет целостный манифест результата, не совпадающий с сохранённым состоянием", async () => {
-  // Проверяет сценарий: отклоняет целостный манифест результата, не совпадающий с сохранённым состоянием.
-
   const root = await mkdtemp(join(tmpdir(), "loop-result-tamper-"));
   roots.push(root);
   const { service } = await setup("mock", root);
@@ -281,12 +273,7 @@ it("отклоняет целостный манифест результата,
     taskId: manifest.taskId,
     versionId: manifest.versionId,
     files: manifest.files.map(
-      /* Извлекает поле, сохраняя порядок записей. */ (file: {
-        artifactId: string;
-        path: string;
-        sha256: string;
-        bytes: number;
-      }) => ({
+      (file: { artifactId: string; path: string; sha256: string; bytes: number }) => ({
         artifactId: file.artifactId,
         path: file.path,
         sha256: file.sha256,

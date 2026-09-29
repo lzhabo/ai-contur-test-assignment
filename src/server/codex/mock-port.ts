@@ -1,7 +1,8 @@
 import type { CodexPort, CodexRunHooks, CodexRunRequest, CodexRunResult } from "../tasks/ports.js";
 import type { AuthorOutput, CodexOutput } from "../tasks/types.js";
+import type { MockScenario } from "./mock-scenarios.js";
 
-export type MockScenario = "happy" | "review_loop" | "no_response" | "review_once" | "slow";
+export type { MockScenario } from "./mock-scenarios.js";
 
 const candidates: Record<string, AuthorOutput> = {
   mergeIntervals: {

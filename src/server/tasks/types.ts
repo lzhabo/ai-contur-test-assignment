@@ -125,8 +125,6 @@ export const RuntimeLimitsSchema = z.object({
   maxModelCalls: z.number().int().positive(),
   modelTimeoutMs: z.number().int().positive(),
   modelWarningMs: z.number().int().positive(),
-  maxTaskChars: z.number().int().positive(),
-  maxArtifactBytes: z.number().int().positive(),
   maxContextBytes: z.number().int().positive(),
   checkTimeoutMs: z.number().int().positive(),
   checkMemoryBytes: z.number().int().positive(),

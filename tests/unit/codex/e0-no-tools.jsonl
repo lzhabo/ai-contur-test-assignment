@@ -1,6 +1,0 @@
-{"type":"thread.started","thread_id":"01a0d31c-aa08-7631-b9e4-82b85f6cde43"}
-{"type":"item.completed","item":{"id":"item_0","type":"error","message":"Code Mode is unavailable because code-mode host is disabled. Code mode will fail closed; enable `features.code_mode_host` and install `codex-code-mode-host`."}}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I’ll check both paths with the available local read tools and report only what they return."}}
-{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"I couldn’t read either file: the available local tool returned “code-mode host is disabled.” I don’t know their contents."}}
-{"type":"turn.completed","usage":{"input_tokens":21648,"cached_input_tokens":12800,"cache_write_input_tokens":0,"output_tokens":152,"reasoning_output_tokens":53}}

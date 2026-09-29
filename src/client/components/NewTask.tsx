@@ -1,4 +1,5 @@
 import { type ReactElement } from "react";
+import { MAX_TASK_CHARS } from "../../shared/limits";
 import { TASK_EXAMPLES } from "../../shared/examples";
 import { ADVANCED_EXAMPLE } from "../../shared/advanced-example";
 import { EXAMPLE_DESCRIPTIONS } from "./labels";
@@ -72,7 +73,7 @@ export function NewTask({
         <label htmlFor="task-text">Что должна делать функция?</label>
         <textarea
           id="task-text"
-          maxLength={8000}
+          maxLength={MAX_TASK_CHARS}
           value={text}
           onChange={(e) => {
             // Сохраняет редактируемый текст только в форме.
@@ -81,7 +82,10 @@ export function NewTask({
           placeholder="Например: объединить пересекающиеся интервалы, не изменяя исходный массив…"
         />
         <div className="composer-bottom">
-          <small>TypeScript · {text.length.toLocaleString("ru-RU")} / 8 000</small>
+          <small>
+            TypeScript · {text.length.toLocaleString("ru-RU")} /{" "}
+            {MAX_TASK_CHARS.toLocaleString("ru-RU")}
+          </small>
           <button
             type="submit"
             className="primary"

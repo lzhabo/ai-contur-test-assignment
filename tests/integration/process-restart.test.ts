@@ -7,9 +7,7 @@ import { once } from "node:events";
 import { expect, it } from "vitest";
 
 it("A-04: после SIGKILL на подтверждении новый процесс продолжает ту же версию без генерации", async () => {
-  // Проверяет сценарий: A-04: после SIGKILL на подтверждении новый процесс продолжает ту же версию без генерации.
-
-  const root = await mkdtemp(path.join(tmpdir(), "loop-qa-process-"));
+  const root = await mkdtemp(path.join(tmpdir(), "kontur-qa-process-"));
   const children: ChildProcess[] = [];
   // Запускает отдельный процесс приложения и возвращает его сигналы для проверки перезапуска.
   function launch(mode: string) {
@@ -69,11 +67,7 @@ it("A-04: после SIGKILL на подтверждении новый проц
       .split("\n")
       .map(/* Читает сохранённую строку JSON как запись журнала. */ (line) => JSON.parse(line));
 
-    expect(calls.map(/* Извлекает поле, сохраняя порядок записей. */ (call) => call.role)).toEqual([
-      "author",
-      "reviewer",
-      "applier",
-    ]);
+    expect(calls.map((call) => call.role)).toEqual(["author", "reviewer", "applier"]);
   } finally {
     for (const child of children) {
       if (child.exitCode === null && child.signalCode === null) {

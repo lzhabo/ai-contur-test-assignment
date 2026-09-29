@@ -15,9 +15,7 @@ import {
 import { TaskStateSchema } from "../../src/server/tasks/types.js";
 
 it("журнал описывает уже сохранённое состояние SQLite без текста задания, кода, ревью и авторизации", async () => {
-  // Проверяет сценарий: журнал описывает уже сохранённое состояние SQLite без текста задания, кода, ревью и авторизации.
-
-  const directory = await mkdtemp(path.join(tmpdir(), "loop-qa-checkpoint-log-"));
+  const directory = await mkdtemp(path.join(tmpdir(), "kontur-qa-checkpoint-log-"));
   const stdout: string[] = [];
   const errors: string[] = [];
   const logs: LogEvent[] = [];
@@ -76,8 +74,7 @@ it("журнал описывает уже сохранённое состоян
           }
           if (event.before && event.changed) {
             const expected = (Object.keys(event.after) as Array<keyof typeof event.after>).filter(
-              /* Отбирает записи проверяемого вида. */ (key) =>
-                event.before![key] !== event.after![key],
+              (key) => event.before![key] !== event.after![key],
             );
             actualDiffs.push(
               JSON.stringify(expected.sort()) === JSON.stringify([...event.changed].sort()),

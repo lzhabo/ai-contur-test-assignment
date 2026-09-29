@@ -22,7 +22,7 @@ afterEach(async () => {
 });
 // Собирает граф с настоящим хранилищем и переданным портом модели для проверки восстановления.
 async function setup(codex: CodexPort, limits = DEFAULT_LIMITS) {
-  const root = await mkdtemp(path.join(tmpdir(), "loop-qa-graph-"));
+  const root = await mkdtemp(path.join(tmpdir(), "kontur-qa-graph-"));
   roots.push(root);
   const artifacts = new LocalArtifactStore(root);
   let stopRequested = false;
@@ -100,17 +100,12 @@ function tracked(scenario: Parameters<typeof createMockCodexPort>[0]) {
   return { calls, codex };
 }
 it("A-04/A-08: граф восстанавливает паузу, а подтверждение вызывает только применяющего агента", async () => {
-  // Проверяет сценарий: A-04/A-08: граф восстанавливает паузу, а подтверждение вызывает только применяющего агента.
-
   const { calls, codex } = tracked("happy");
   const f = await setup(codex);
   const first = await f.graph().invoke({ value: f.state }, f.config);
 
   expect(first.value.phase).toBe("awaiting_approval");
-  expect(calls.map(/* Извлекает поле, сохраняя порядок записей. */ (call) => call.role)).toEqual([
-    "author",
-    "reviewer",
-  ]);
+  expect(calls.map((call) => call.role)).toEqual(["author", "reviewer"]);
   await expect(access(path.join(f.root, "tasks/qa-graph/result"))).rejects.toMatchObject({
     code: "ENOENT",
   });
@@ -136,17 +131,11 @@ it("A-04/A-08: граф восстанавливает паузу, а подтв
   );
 
   expect(result.value.phase).toBe("completed");
-  expect(calls.map(/* Извлекает поле, сохраняя порядок записей. */ (call) => call.role)).toEqual([
-    "author",
-    "reviewer",
-    "applier",
-  ]);
+  expect(calls.map((call) => call.role)).toEqual(["author", "reviewer", "applier"]);
   expect(result.value.usedModelCalls).toBe(3);
 }, 15000);
 
 it("A-03/A-04: отсутствие ответа сохраняет бюджет, новый вызов требует явного повтора", async () => {
-  // Проверяет сценарий: A-03/A-04: отсутствие ответа сохраняет бюджет, новый вызов требует явного повтора.
-
   const { calls, codex } = tracked("no_response");
   const f = await setup(codex, {
     ...DEFAULT_LIMITS,
@@ -176,8 +165,6 @@ it("A-03/A-04: отсутствие ответа сохраняет бюджет
 }, 10000);
 
 it("A-02: бесконечные замечания останавливаются по общим лимитам", async () => {
-  // Проверяет сценарий: A-02: бесконечные замечания останавливаются по общим лимитам.
-
   const { calls, codex } = tracked("review_loop");
   const f = await setup(codex, { ...DEFAULT_LIMITS, maxModelCalls: 3 });
   const result = await f.graph().invoke({ value: f.state }, f.config);
@@ -194,8 +181,6 @@ it("A-02: бесконечные замечания останавливаютс
 }, 15000);
 
 it("A-08: одобрение ревьюера не разрешает подтверждать некомпилируемый код", async () => {
-  // Проверяет сценарий: A-08: одобрение ревьюера не разрешает подтверждать некомпилируемый код.
-
   const mock = createMockCodexPort("happy");
   const codex: CodexPort = {
     // Подменяет код кандидата версией с ошибкой компиляции при сохранении остальных ответов.
@@ -219,8 +204,6 @@ it("A-08: одобрение ревьюера не разрешает подтв
 }, 10000);
 
 it("A-08: остановка во время вызова отклоняет запоздалый успешный ответ", async () => {
-  // Проверяет сценарий: A-08: остановка во время вызова отклоняет запоздалый успешный ответ.
-
   const mock = createMockCodexPort("happy");
   let entered!: () => void;
   let release!: () => void;
@@ -259,8 +242,6 @@ it("A-08: остановка во время вызова отклоняет з�
 }, 10000);
 
 it("A-04: архив сверх лимита запроса не отправляется как контекст продолжения", async () => {
-  // Проверяет сценарий: A-04: архив сверх лимита запроса не отправляется как контекст продолжения.
-
   const { calls, codex } = tracked("review_once");
   const f = await setup(codex);
   const sentinel = "QA_ARCHIVE_ONLY_7f51ce40_DO_NOT_INCLUDE_IN_NEXT_INPUT";
@@ -283,12 +264,7 @@ it("A-04: архив сверх лимита запроса не отправл�
   const result = await f.graph().invoke({ value: f.state }, f.config);
 
   expect(result.value.phase).toBe("awaiting_approval");
-  expect(calls.map(/* Извлекает поле, сохраняя порядок записей. */ (call) => call.role)).toEqual([
-    "author",
-    "reviewer",
-    "author",
-    "reviewer",
-  ]);
+  expect(calls.map((call) => call.role)).toEqual(["author", "reviewer", "author", "reviewer"]);
 
   for (const call of calls) {
     expect(call.contextText).not.toContain(sentinel);

@@ -24,7 +24,7 @@ describe("контракты внешних данных", () => {
 
   it("требует разные модели автора и ревьюера", () => {
     // Проверяет, что одинаковая модель автора и ревьюера не проходит схему настроек.
-    const input = { author: "same", reviewer: "same", applier: "same" };
+    const input = { author: "gpt-6-sol", reviewer: "gpt-6-sol", applier: "gpt-6-sol" };
 
     const result = ModelAssignmentsSchema.safeParse(input);
 

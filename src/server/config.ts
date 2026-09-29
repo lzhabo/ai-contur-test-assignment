@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { SupportedModelSchema } from "./codex/models.js";
+import { MockScenarioSchema } from "./codex/mock-scenarios.js";
 import { RuntimeLimitsSchema, type RuntimeLimits } from "./tasks/types.js";
 
 export const DEFAULT_LIMITS = RuntimeLimitsSchema.parse({
@@ -6,8 +8,6 @@ export const DEFAULT_LIMITS = RuntimeLimitsSchema.parse({
   maxModelCalls: 7,
   modelTimeoutMs: 180_000,
   modelWarningMs: 30_000,
-  maxTaskChars: 8_000,
-  maxArtifactBytes: 64 * 1024,
   maxContextBytes: 96 * 1024,
   checkTimeoutMs: 5_000,
   checkMemoryBytes: 64 * 1024 * 1024,
@@ -15,9 +15,9 @@ export const DEFAULT_LIMITS = RuntimeLimitsSchema.parse({
 
 export const ModelAssignmentsSchema = z
   .object({
-    author: z.string().min(1),
-    reviewer: z.string().min(1),
-    applier: z.string().min(1),
+    author: SupportedModelSchema,
+    reviewer: SupportedModelSchema,
+    applier: SupportedModelSchema,
   })
   .refine(
     /* Требует разные модели у автора и ревьюера. */ (models) => models.author !== models.reviewer,
@@ -36,7 +36,7 @@ export const AppConfigSchema = z.object({
   port: z.number().int().min(1).max(65535),
   dataDir: z.string().min(1),
   executionMode: z.enum(["real", "mock"]),
-  mockScenario: z.enum(["happy", "review_loop", "no_response", "review_once", "slow"]),
+  mockScenario: MockScenarioSchema,
   models: ModelAssignmentsSchema,
   limits: RuntimeLimitsSchema,
 });
@@ -47,7 +47,7 @@ export function loadAppConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return AppConfigSchema.parse({
     host: "127.0.0.1",
     port: Number(env.APP_PORT ?? 4317),
-    dataDir: env.APP_DATA_DIR ?? ".local-data/architecture-rework",
+    dataDir: env.APP_DATA_DIR ?? ".local-data",
     executionMode: env.APP_CODEX_MODE ?? "real",
     mockScenario: env.APP_MOCK_SCENARIO ?? "happy",
     models: {

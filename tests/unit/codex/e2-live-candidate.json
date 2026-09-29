@@ -1,1 +1,0 @@
-{"requestedModelId":"gpt-6-sol","outputKind":"candidate","functionName":"add","cases":[{"name":"sum","args":[2,3],"expected":5}],"observations":["local_started:process_spawned","response_started:turn_started","process_exited:process_closed"]}

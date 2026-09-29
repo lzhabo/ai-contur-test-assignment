@@ -1,4 +1,0 @@
-Проверка 28.09.2026: исходные JSONL и копии для чтения.
-01-langgraph-choice.jsonl: SHA-256 PASS; исходные байты и порядок PASS; тексты Markdown PASS; сообщений 6.
-02-user-journey-and-artifacts.jsonl: SHA-256 PASS; исходные байты и порядок PASS; тексты Markdown PASS; сообщений 4.
-03-mock-tests.jsonl: SHA-256 PASS; исходные байты и порядок PASS; тексты Markdown PASS; сообщений 10.

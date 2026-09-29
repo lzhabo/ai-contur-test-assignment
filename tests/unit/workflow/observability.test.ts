@@ -44,8 +44,6 @@ async function setup(logger: ObservabilityLogger, root: string) {
 }
 
 it("записывает ограниченный набор изменений после фактического сохранения SQLite", async () => {
-  // Проверяет сценарий: записывает ограниченный набор изменений после фактического сохранения SQLite.
-
   const root = await mkdtemp(join(tmpdir(), "loop-log-"));
   roots.push(root);
   const output: string[] = [];
@@ -87,8 +85,7 @@ it("записывает ограниченный набор изменений 
         JSON.parse(line) as Record<string, unknown>,
     );
   const persisted = records.filter(
-    /* Отбирает записи проверяемого вида. */ (record) =>
-      record.event === "checkpoint_persisted" && record.taskId === taskId,
+    (record) => record.event === "checkpoint_persisted" && record.taskId === taskId,
   );
 
   expect(persisted.length).toBeGreaterThan(3);
@@ -137,8 +134,6 @@ it("записывает ограниченный набор изменений 
 });
 
 it("сохраняет состояние при отказе записи журнала", async () => {
-  // Проверяет сценарий: сохраняет состояние при отказе записи журнала.
-
   const root = await mkdtemp(join(tmpdir(), "loop-log-fail-"));
   roots.push(root);
   const logger = await createStructuredLogger(root, {
@@ -167,8 +162,6 @@ it("сохраняет состояние при отказе записи жу�
 });
 
 it("доводит задачу до паузы, даже если журнал отклоняет каждую запись", async () => {
-  // Проверяет сценарий: доводит задачу до паузы, даже если журнал отклоняет каждую запись.
-
   const root = await mkdtemp(join(tmpdir(), "loop-log-reject-"));
   roots.push(root);
   const rejecting: ObservabilityLogger = {
@@ -206,8 +199,6 @@ it("доводит задачу до паузы, даже если журнал 
 });
 
 it("ротирует JSONL ограниченного размера без изменения состояния задачи", async () => {
-  // Проверяет сценарий: ротирует JSONL ограниченного размера без изменения состояния задачи.
-
   const root = await mkdtemp(join(tmpdir(), "loop-log-rotate-"));
   roots.push(root);
   const logger = await createStructuredLogger(root, {

@@ -31,7 +31,7 @@ afterEach(async () => {
 
 // Создаёт настоящий сервис, SQLite и QuickJS во временном каталоге; подменяет только ответы Codex.
 export async function setupService(scenario: MockScenario = "happy") {
-  const root = await mkdtemp(path.join(tmpdir(), "loop-test-service-"));
+  const root = await mkdtemp(path.join(tmpdir(), "kontur-test-service-"));
   roots.push(root);
   const artifacts = new LocalArtifactStore(root);
   const mock = createMockCodexPort(scenario);

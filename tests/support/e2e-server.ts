@@ -13,7 +13,7 @@ import type { CodexPort } from "../../src/server/tasks/ports.js";
 
 // Каждый прогон начинает с новых данных; real включается только явной переменной окружения.
 const executionMode = process.env.QA_REAL_CODEX === "1" ? "real" : "mock";
-const dataDir = await mkdtemp(join(tmpdir(), `loop-e2e-${executionMode}-`));
+const dataDir = await mkdtemp(join(tmpdir(), `kontur-e2e-${executionMode}-`));
 const artifacts = new LocalArtifactStore(dataDir);
 const adapter = executionMode === "real" ? new CodexCliPort() : createMockCodexPort("happy");
 const roles: string[] = [];

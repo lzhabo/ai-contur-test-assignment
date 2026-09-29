@@ -1,9 +1,0 @@
-
- RUN  v5.0.1 /Users/lidia/.codex/worktrees/architecture-rework/agent-workspace
-
-
- Test Files  11 passed (11)
-      Tests  66 passed (66)
-   Start at  19:47:22
-   Duration  8.07s (tests 88%, import 7%, transform 3%, environment 2%)
-

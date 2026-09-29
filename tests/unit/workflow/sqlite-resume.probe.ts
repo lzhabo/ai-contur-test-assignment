@@ -1,4 +1,4 @@
-// E0 compatibility probe. Run `start` and `resume` in separate OS processes.
+// Проверяет сохранение минимального графа между отдельными процессами start и resume.
 import assert from "node:assert/strict";
 import { appendFileSync, readFileSync, statSync } from "node:fs";
 import { Annotation, Command, END, interrupt, START, StateGraph } from "@langchain/langgraph";
@@ -22,7 +22,7 @@ const graph = new StateGraph(State)
     /* Сохраняет номер попытки и расход бюджета перед внешним вызовом. */ (state) => ({
       phase: "reserved",
       reservedCalls: state.reservedCalls + 1,
-      attemptId: "attempt-e0-1",
+      attemptId: "attempt-probe-1",
     }),
   )
   .addNode("author", async (state) => {
@@ -31,7 +31,7 @@ const graph = new StateGraph(State)
 
     assert.equal(committed?.checkpoint.channel_values.phase, "reserved");
     assert.equal(committed?.checkpoint.channel_values.reservedCalls, 1);
-    assert.equal(committed?.checkpoint.channel_values.attemptId, "attempt-e0-1");
+    assert.equal(committed?.checkpoint.channel_values.attemptId, "attempt-probe-1");
     assert.equal(state.reservedCalls, 1);
 
     appendFileSync(counterPath, "author\n");
@@ -50,7 +50,7 @@ const graph = new StateGraph(State)
   .compile({ checkpointer: SqliteSaver.fromConnString(databasePath) });
 
 const config = {
-  configurable: { thread_id: "e0-cross-process" },
+  configurable: { thread_id: "sqlite-cross-process" },
   durability: "sync" as const,
 };
 const count = /* Подсчитывает сохранённые вызовы для обнаружения лишнего повтора. */ () =>
@@ -72,7 +72,7 @@ if (stage === "start") {
   assert.deepEqual(snapshot.next, ["approval"]);
   assert.equal(snapshot.values.authorRuns, 1);
   assert.equal(snapshot.values.reservedCalls, 1);
-  assert.equal(snapshot.values.attemptId, "attempt-e0-1");
+  assert.equal(snapshot.values.attemptId, "attempt-probe-1");
   assert.equal(snapshot.values.phase, "awaiting_approval");
   assert.equal(count(), 1);
   assert.ok(statSync(databasePath).size > 0);
@@ -91,7 +91,7 @@ if (stage === "start") {
   assert.deepEqual(before.next, ["approval"]);
   assert.equal(before.values.authorRuns, 1);
   assert.equal(before.values.reservedCalls, 1);
-  assert.equal(before.values.attemptId, "attempt-e0-1");
+  assert.equal(before.values.attemptId, "attempt-probe-1");
 
   await graph.invoke(new Command({ resume: "approved" }), config);
   const after = await graph.getState(config);
@@ -101,7 +101,7 @@ if (stage === "start") {
   assert.equal(after.values.phase, "complete");
   assert.equal(after.values.authorRuns, 1);
   assert.equal(after.values.reservedCalls, 1);
-  assert.equal(after.values.attemptId, "attempt-e0-1");
+  assert.equal(after.values.attemptId, "attempt-probe-1");
   assert.equal(count(), 1, "author must not run again after resume");
 
   console.log(

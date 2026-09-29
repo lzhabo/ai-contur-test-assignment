@@ -3,8 +3,6 @@ import { unzipSync, strFromU8 } from "fflate";
 import { setup, post, until, deadline, aborts } from "../support/http.js";
 
 it("A-03/A-09: SSE доставляет новое событие и повторяет только события после Last-Event-ID", async () => {
-  // Проверяет сценарий: A-03/A-09: SSE доставляет новое событие и повторяет только события после Last-Event-ID.
-
   const { service, base } = await setup();
   const { taskId } = await service.createTask({ text: "mergeIntervals" });
   const controller = new AbortController();
@@ -81,8 +79,6 @@ it("A-03/A-09: SSE доставляет новое событие и повто�
 });
 
 it("SSE доставляет событие на границе истории и подписки ровно один раз", async () => {
-  // Проверяет сценарий: SSE доставляет событие на границе истории и подписки ровно один раз.
-
   const { service, base } = await setup("happy");
   const { taskId } = await service.createTask({ text: "mergeIntervals" });
   const paused = await until(
@@ -158,8 +154,6 @@ it("SSE доставляет событие на границе истории �
 });
 
 it("HTTP сохраняет текст файлов и двоичные байты опубликованного ZIP", async () => {
-  // Проверяет сценарий: HTTP сохраняет текст файлов и двоичные байты опубликованного ZIP.
-
   const { service, base } = await setup("happy");
   const created = await post(base, "/api/tasks", { text: "mergeIntervals" });
   const { taskId } = (await created.json()) as { taskId: string };
@@ -199,7 +193,7 @@ it("HTTP сохраняет текст файлов и двоичные байт
 
   expect(zip.status).toBe(200);
   expect(zip.headers.get("content-type")).toContain("application/zip");
-  expect(zip.headers.get("content-disposition")).toContain("two-model-result.zip");
+  expect(zip.headers.get("content-disposition")).toContain("kontur-result.zip");
 
   const archive = new Uint8Array(await zip.arrayBuffer());
 

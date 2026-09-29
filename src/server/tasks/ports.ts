@@ -60,7 +60,6 @@ export interface ArtifactStore {
   writeVersion(request: WriteVersionRequest): Promise<ArtifactRef>;
   // Throws when a file is missing, altered, unsafe or belongs to another task.
   verifyVersion(ref: ArtifactRef): Promise<void>;
-  prepareWorkingCopy(ref: ArtifactRef): Promise<string>;
   // Implementation must compare exact version/hash and refuse stale approval.
   publishApprovedVersion(ref: ArtifactRef, approval: Approval): Promise<PublishedResult>;
   getFile(
