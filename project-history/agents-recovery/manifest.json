@@ -1,0 +1,35 @@
+{
+  "source_tree": "8809e1a7562bcb99cbbcbb47cbe0effc9a3e4afd",
+  "files": [
+    {
+      "path": ".codex/agents/implementer.toml",
+      "bytes": 1384,
+      "sha256": "d87b9a4b6c2e0345865a7a4b390ac3187e36e9efa63af909ff064932be6de119"
+    },
+    {
+      "path": ".codex/agents/planner.toml",
+      "bytes": 1377,
+      "sha256": "3cfd6461184e025a6c41c9055cae78d7936327b1136b68ea322c7183198983ce"
+    },
+    {
+      "path": ".codex/agents/qa.toml",
+      "bytes": 1493,
+      "sha256": "c6fec9ae64f8f7cc52ebcf17e97a971e3e5c222246ad44afd5496ebc1ca43b12"
+    },
+    {
+      "path": ".codex/agents/researcher.toml",
+      "bytes": 2046,
+      "sha256": "191288a33da8ec470128fec40f6f71529fc7659091c9a83e0a7a0e464147c6f7"
+    },
+    {
+      "path": ".codex/agents/reviewer.toml",
+      "bytes": 1042,
+      "sha256": "d1bdd21990dc966c6c90e0e57c57987dab83f4849f1ead766d635503f3241df0"
+    },
+    {
+      "path": ".codex/config.toml",
+      "bytes": 63,
+      "sha256": "af00171d0ae3470aa41fb82e4165d91e5871e912d635e7545f9dc8f4a7752fc9"
+    }
+  ]
+}

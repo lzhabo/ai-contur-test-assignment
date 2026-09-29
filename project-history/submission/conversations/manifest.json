@@ -1,0 +1,58 @@
+{
+  "export_date": "2026-09-28",
+  "files": [
+    {
+      "file": "01-langgraph-choice.jsonl",
+      "sha256": "f58bffd3b0cc3c22f9a91e0a65a13038339b8fad3ea71d85c08f1ea6ccf23a81",
+      "source_session": "rollout-2026-09-23T18-08-54-01a0cf3d-e26e-7420-8737-1e51298e46e3.jsonl",
+      "source_sha256_at_export": "786a9fa6b2417cfc86831ac847f7415b3a6b003f2762d1140c1086ef18cbb8d5",
+      "source_line_numbers": [
+        256,
+        265,
+        268,
+        301,
+        329,
+        343
+      ],
+      "turns": "01a0d2cd-f9d9-7080-91b5-14149ed65e7e → 01a0d2e3-b947-7183-a169-7a3c44875594",
+      "message_records": 6,
+      "selection": "Original response_item message records, user and assistant only; original bytes preserved, other record types omitted."
+    },
+    {
+      "file": "02-user-journey-and-artifacts.jsonl",
+      "sha256": "ff40a00d80a68287ff6aa1ca46ed304f7d05f68d072e59d1bcdba4ab797c61ca",
+      "source_session": "rollout-2026-09-23T18-08-54-01a0cf3d-e26e-7420-8737-1e51298e46e3.jsonl",
+      "source_sha256_at_export": "786a9fa6b2417cfc86831ac847f7415b3a6b003f2762d1140c1086ef18cbb8d5",
+      "source_line_numbers": [
+        430,
+        433,
+        458,
+        466
+      ],
+      "turns": "01a0d305-27fa-7493-b241-e47f922e83b9",
+      "message_records": 4,
+      "selection": "Original response_item message records, user and assistant only; original bytes preserved, other record types omitted."
+    },
+    {
+      "file": "03-mock-tests.jsonl",
+      "sha256": "ae37eb6d60e63905ae3c6cad93389d7e964fca7e36d73ba3a7a0a47b82180fa2",
+      "source_session": "rollout-2026-09-27T17-33-53-01a0e3b7-4272-7682-9cdf-40cf03295c50.jsonl",
+      "source_sha256_at_export": "6dfbfe9e2ccfbbb335077a531ec00069038884df5320f81d306c8379badde258",
+      "source_line_numbers": [
+        323,
+        328,
+        343,
+        385,
+        407,
+        414,
+        419,
+        462,
+        503,
+        526
+      ],
+      "turns": "01a0e3fb-5b82-7e51-b4ca-323e9d423a8a → 01a0e405-77fb-7631-9c17-d65ced112c93",
+      "message_records": 10,
+      "selection": "Original response_item message records, user and assistant only; original bytes preserved, other record types omitted."
+    }
+  ]
+}

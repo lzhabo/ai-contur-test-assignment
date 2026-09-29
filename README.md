@@ -2,13 +2,17 @@
 
 Локальное приложение для разработки одной TypeScript-функции. Автор создаёт код, ревьюер проверяет его на другой модели, а применяющий агент сохраняет результат после подтверждения пользователя. React показывает задачи и переписку; Express обслуживает API; LangGraph управляет шагами и восстановлением.
 
+## Материалы для сдачи
+
+Актуальный [комплект сдачи](project-history/submission/README.md): [хендофф](project-history/submission/handoff.md), [план демонстрации на 20 минут](project-history/submission/demo.md), [журнал решений](project-history/submission/decisions.md), [три подлинных переписки с ИИ](project-history/submission/conversations/README.md). Подготовлен 28.09.2026 по истории обсуждений и коду `f537ce4`.
+
 ## Запуск
 
-Среда: Node.js 26+, npm, Codex CLI 0.156.1 с выполненным входом через ChatGPT.
+Среда: Node.js 26+, npm, Codex CLI 0.156.1 с выполненным входом через ChatGPT. Адаптер сейчас использует жёстко заданный путь `/opt/homebrew/bin/codex`; наличие CLI только в другом каталоге PATH недостаточно. Собственного экрана авторизации в приложении пока нет. Подробности и запуск без облачных моделей — в [хендоффе](project-history/submission/handoff.md).
 
 ```sh
 npm ci
-codex login status
+/opt/homebrew/bin/codex login status
 npm start
 ```
 
@@ -22,6 +26,8 @@ npm start
 Поддерживаются чистые синхронные функции с JSON-входами и выходами. Проверки выполняются в QuickJS с ограничениями времени и памяти. Закрытие вкладки не останавливает сервер; Ctrl+C завершает сервер, следующий запуск восстанавливает сохранённые задачи.
 
 ## Структура
+
+[История работы над проектом](project-history/README.md): задания, исследования, планы, согласованные решения и результаты проверок.
 
 ```text
 src/
@@ -92,12 +98,12 @@ APP_CODEX_MODE=mock APP_MOCK_SCENARIO=review_once APP_DATA_DIR=.local-data/mock-
 
 В `test:live-review` только первая версия замокана с намеренной ошибкой. Ревью, исправление и повторное ревью выполняет настоящий Codex; отчёт отмечает смешанное происхождение ответов. Этот прогон отдельно проверяет возврат замечаний автору.
 
-[Правила чтения и запуска тестов](tests/README.md), [карта исходных сценариев](tests/scenario-map.md), [команды модельных проверок](tasks/architecture-rework/testing-guide.md).
+[Правила чтения и запуска тестов](tests/README.md), [карта исходных сценариев](tests/scenario-map.md), [команды модельных проверок](project-history/architecture-rework/testing-guide.md).
 
 ## Решения и история
 
-[Принятый план](tasks/architecture-rework/plan.md), [договорённости](tasks/architecture-rework/decisions.md), [состояние работы](tasks/architecture-rework/status.md), [результаты проверок](tasks/architecture-rework/verification.md).
+[Принятый план](project-history/architecture-rework/plan.md), [договорённости](project-history/architecture-rework/decisions.md), [состояние работы](project-history/architecture-rework/status.md), [результаты проверок](project-history/architecture-rework/verification.md).
 
-Первая версия сохранена в ветке `codex/original-reference`, версия на Express — в `codex/express-migration`. Документы `tasks/two-model-loop/` и `tasks/express-migration/` содержат исторические решения и доказательства прежних прогонов. Актуальные команды новой версии находятся в этом README и документах `tasks/architecture-rework/`.
+Первая версия сохранена в ветке `codex/original-reference`, версия на Express — в `codex/express-migration`. Документы `project-history/two-model-loop/` и `project-history/express-migration/` содержат исторические решения и доказательства прежних прогонов. Актуальные команды новой версии находятся в этом README и документах `project-history/architecture-rework/`.
 
-Правила разработки: `AGENTS.md`, `workflow/PROCESS.md`.
+Правила разработки: [инструкции для агентов](AGENTS.md), [процесс разработки проекта](development-process.md).
