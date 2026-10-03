@@ -9,11 +9,13 @@ export const STAGES = [
   { id: "result", title: "Результат", detail: "Файлы на вашем Mac" },
 ] as const;
 export type StageId = (typeof STAGES)[number]["id"];
-export type StageStatus = "waiting" | "active" | "observed" | "stopped" | "error" | "unknown";
+export type StageStatus =
+  "waiting" | "active" | "observed" | "paused" | "stopped" | "error" | "unknown";
 export const STATUS_LABELS: Record<StageStatus, string> = {
   waiting: "Ещё не выполнялся",
   active: "Текущий этап",
   observed: "Есть результат этапа",
+  paused: "Нужен вход в Codex",
   stopped: "Остановлено",
   error: "Ошибка",
   unknown: "Исход неизвестен",
@@ -49,12 +51,16 @@ export function eventStage(event: TaskEvent): StageId | null {
   return null;
 }
 
-/** Связывает ошибку с начатой попыткой, даже если ошибку записала сама система. */
-function failureStage(events: TaskEvent[]): StageId | null {
+/** Связывает остановку или паузу входа с начатой попыткой, даже если событие записала система. */
+function interruptedStage(events: TaskEvent[], awaitingAuth: boolean): StageId | null {
   // Ищет последнее событие, прервавшее выполнение задачи.
   const failure = [...events]
     .reverse()
-    .find((event) => ["task_stopped", "task_failed", "unknown_outcome"].includes(event.type));
+    .find((event) =>
+      awaitingAuth
+        ? event.type === "phase_changed" && event.attemptId !== null
+        : ["task_stopped", "task_failed", "unknown_outcome"].includes(event.type),
+    );
   // Восстанавливает роль агента по устойчивому идентификатору попытки.
   const attempt = failure?.attemptId
     ? events.find(
@@ -98,8 +104,10 @@ export function workflowView(snapshot: TaskSnapshotResponse): WorkflowView {
     completed: "result",
   };
   const terminal = ["stopped", "error", "unknown_outcome"].includes(snapshot.task.phase);
+  const awaitingAuth = snapshot.task.phase === "awaiting_auth";
   const current =
-    phaseStage[snapshot.task.phase] ?? (terminal ? (failureStage(events) ?? undefined) : undefined);
+    phaseStage[snapshot.task.phase] ??
+    (terminal || awaitingAuth ? (interruptedStage(events, awaitingAuth) ?? undefined) : undefined);
   const completionTypes: Record<StageId, TaskEvent["type"][]> = {
     author: ["version_created"],
     checks: ["checks_finished"],
@@ -115,13 +123,15 @@ export function workflowView(snapshot: TaskSnapshotResponse): WorkflowView {
       ? "observed"
       : "waiting";
     if (stage.id === current && snapshot.task.phase !== "completed")
-      status = terminal
-        ? snapshot.task.phase === "unknown_outcome"
-          ? "unknown"
-          : snapshot.task.phase === "error"
-            ? "error"
-            : "stopped"
-        : "active";
+      status = awaitingAuth
+        ? "paused"
+        : terminal
+          ? snapshot.task.phase === "unknown_outcome"
+            ? "unknown"
+            : snapshot.task.phase === "error"
+              ? "error"
+              : "stopped"
+          : "active";
     return { ...stage, status };
   });
   return { events, stages, reviews, returns, versions, current };

@@ -6,6 +6,7 @@ export const PHASES: Record<TaskPhase, string> = {
   checking: "Проверка функции",
   review: "Ревью кода",
   awaiting_approval: "Нужно ваше решение",
+  awaiting_auth: "Нужен вход в Codex",
   applying: "Сохранение результата",
   completed: "Готово",
   stopped: "Остановлено",

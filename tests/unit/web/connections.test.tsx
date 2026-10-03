@@ -1,11 +1,15 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useState, type ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import * as api from "../../../src/client/api/connections";
+import * as tasks from "../../../src/client/api/tasks";
+import { HttpError } from "../../../src/client/api/http";
 import { ConnectionStatus } from "../../../src/client/components/ConnectionStatus";
 import { NewTask } from "../../../src/client/components/NewTask";
 import { useConnections } from "../../../src/client/hooks/use-connections";
+import { useTaskCommands } from "../../../src/client/hooks/use-task-commands";
 import type { CodexReadiness } from "../../../src/shared/connections";
 
 const clients: QueryClient[] = [];
@@ -39,17 +43,166 @@ function ConnectionScreen() {
   );
 }
 
-function renderConnection() {
+function renderConnection(content: ReactNode = <ConnectionScreen />) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: 3, retryDelay: 0, gcTime: Infinity } },
   });
   clients.push(client);
-  return render(
-    <QueryClientProvider client={client}>
-      <ConnectionScreen />
-    </QueryClientProvider>,
+  return render(<QueryClientProvider client={client}>{content}</QueryClientProvider>);
+}
+
+// Настоящие hooks и форма; mock ограничен ответами HTTP API.
+function TaskConnectionScreen({ onCreated }: { onCreated: (id: string) => void }) {
+  const connection = useConnections();
+  const commands = useTaskCommands(onCreated);
+  const [text, setText] = useState("");
+  return (
+    <>
+      <ConnectionStatus {...connection} />
+      {commands.error && <p role="alert">{commands.error}</p>}
+      <NewTask
+        text={text}
+        setText={setText}
+        serverMode="real"
+        activeId={null}
+        busy={commands.busy}
+        connectionReady={connection.ready}
+        create={commands.create}
+        selectTask={() => {}}
+      />
+    </>
   );
 }
+
+it("logout до опроса обновляет подключение после отказа запуска; login убирает ошибку и позволяет один повтор с тем же текстом и ключом", async () => {
+  const missingAuth: CodexReadiness = {
+    ...loggedIn,
+    ready: false,
+    checks: [
+      loggedIn.checks[0]!,
+      { id: "auth", status: "failed", message: "Выполните codex login в терминале." },
+      loggedIn.checks[2]!,
+    ],
+  };
+  const load = vi
+    .spyOn(api, "getConnections")
+    .mockResolvedValueOnce(loggedIn)
+    .mockResolvedValueOnce(missingAuth)
+    .mockResolvedValueOnce(loggedIn);
+  const create = vi
+    .spyOn(tasks, "createTask")
+    .mockRejectedValueOnce(new HttpError("Вход в Codex отсутствует.", 503, "codex_not_ready"))
+    .mockResolvedValueOnce({ taskId: "created" });
+  const onCreated = vi.fn();
+  renderConnection(<TaskConnectionScreen onCreated={onCreated} />);
+  await screen.findByText(/Вход через ChatGPT подтверждён/);
+  const input = screen.getByLabelText("Что должна делать функция?") as HTMLTextAreaElement;
+  const start = screen.getByRole("button", { name: "Запустить агентов →" }) as HTMLButtonElement;
+  fireEvent.change(input, { target: { value: "Объединить интервалы" } });
+
+  fireEvent.click(start);
+  await screen.findByText("Вход в Codex — требуется действие.");
+
+  expect(start.disabled).toBe(true);
+  expect(input.value).toBe("Объединить интервалы");
+  expect(screen.queryByText(/Вход через ChatGPT подтверждён/)).toBeNull();
+  expect(screen.getByRole("alert").textContent).toContain("Вход в Codex отсутствует");
+  expect(create).toHaveBeenCalledTimes(1);
+  expect(onCreated).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Проверить снова" }));
+  await screen.findByText(/Вход через ChatGPT подтверждён/);
+
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(start.disabled).toBe(false);
+  expect(input.value).toBe("Объединить интервалы");
+  expect(create).toHaveBeenCalledTimes(1);
+  expect(load).toHaveBeenCalledTimes(3);
+
+  fireEvent.click(start);
+  fireEvent.click(start);
+  await waitFor(() => expect(onCreated).toHaveBeenCalledExactlyOnceWith("created"));
+
+  expect(create).toHaveBeenCalledTimes(2);
+  expect(create.mock.calls[1]).toEqual(create.mock.calls[0]);
+});
+
+it("отказ запуска отменяет проверку, начатую до logout, и её поздний успех не разблокирует форму", async () => {
+  let rejectCreate!: (cause: Error) => void;
+  const creating = new Promise<never>((_resolve, reject) => {
+    rejectCreate = reject;
+  });
+  let resolveOldCheck!: (value: CodexReadiness) => void;
+  const oldCheck = new Promise<CodexReadiness>((resolve) => {
+    resolveOldCheck = resolve;
+  });
+  let oldSignal: AbortSignal | undefined;
+  const missingAuth: CodexReadiness = {
+    ...loggedIn,
+    ready: false,
+    checks: [
+      loggedIn.checks[0]!,
+      { id: "auth", status: "failed", message: "Выполните codex login в терминале." },
+      loggedIn.checks[2]!,
+    ],
+  };
+  const load = vi
+    .spyOn(api, "getConnections")
+    .mockResolvedValueOnce(loggedIn)
+    .mockImplementationOnce((signal) => {
+      oldSignal = signal;
+      return oldCheck;
+    })
+    .mockResolvedValueOnce(missingAuth);
+  vi.spyOn(tasks, "createTask").mockReturnValueOnce(creating);
+  renderConnection(<TaskConnectionScreen onCreated={vi.fn()} />);
+  await screen.findByText(/Вход через ChatGPT подтверждён/);
+  fireEvent.change(screen.getByLabelText("Что должна делать функция?"), {
+    target: { value: "Объединить интервалы" },
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: "Запустить агентов →" }));
+  fireEvent.click(screen.getByRole("button", { name: "Проверить снова" }));
+  await waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+  await act(async () => {
+    rejectCreate(new HttpError("Вход в Codex отсутствует.", 503, "codex_not_ready"));
+  });
+  await screen.findByText("Вход в Codex — требуется действие.");
+
+  expect(oldSignal?.aborted).toBe(true);
+  expect(load).toHaveBeenCalledTimes(3);
+
+  await act(async () => {
+    resolveOldCheck(loggedIn);
+    await oldCheck;
+  });
+
+  expect(screen.queryByText(/Вход через ChatGPT подтверждён/)).toBeNull();
+  expect(screen.getByRole("alert").textContent).toContain("Вход в Codex отсутствует");
+  expect(
+    (screen.getByRole("button", { name: "Запустить агентов →" }) as HTMLButtonElement).disabled,
+  ).toBe(true);
+});
+
+it("успешная проверка входа не скрывает ошибку команды с неизвестным исходом", async () => {
+  vi.spyOn(api, "getConnections").mockResolvedValue(loggedIn);
+  const create = vi
+    .spyOn(tasks, "createTask")
+    .mockRejectedValue(new Error("Соединение оборвалось"));
+  renderConnection(<TaskConnectionScreen onCreated={vi.fn()} />);
+  await screen.findByText(/Вход через ChatGPT подтверждён/);
+  fireEvent.change(screen.getByLabelText("Что должна делать функция?"), {
+    target: { value: "Объединить интервалы" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Запустить агентов →" }));
+  await screen.findByRole("alert");
+
+  fireEvent.click(screen.getByRole("button", { name: "Проверить снова" }));
+  await screen.findByText(/Вход через ChatGPT подтверждён/);
+
+  expect(screen.getByRole("alert").textContent).toBe("Соединение оборвалось");
+  expect(create).toHaveBeenCalledTimes(1);
+});
 
 it("отсутствие входа показывает codex login; повторная проверка разрешает запуск после входа", async () => {
   const missingAuth: CodexReadiness = {

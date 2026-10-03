@@ -21,6 +21,7 @@ export type AgentSteps = Record<
   | "callReviewer"
   | "waitApproval"
   | "pauseUnknown"
+  | "pauseAuth"
   | "prepareApplier"
   | "callApplier",
   TaskNode
@@ -208,6 +209,13 @@ export function createAgentSteps(hooks: AgentHooks): AgentSteps {
         action: "explicit_retry_required",
         attemptId: current.lastAttempt?.attemptId ?? null,
       });
+      return {
+        value: { ...current, phase: "preparing" as const, stopReason: null, updatedAt: now() },
+      };
+    },
+    pauseAuth: /* Сохраняет паузу до ручного продолжения после повторного входа. */ (state) => {
+      const current = state.value;
+      interrupt({ action: "login_required", attemptId: current.lastAttempt?.attemptId ?? null });
       return {
         value: { ...current, phase: "preparing" as const, stopReason: null, updatedAt: now() },
       };

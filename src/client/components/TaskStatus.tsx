@@ -7,11 +7,17 @@ import { PHASES, ROLES, time } from "./labels";
 interface TaskStatusProps {
   snapshot: TaskSnapshotResponse;
   connected: boolean;
+  connectionReady: boolean;
   commands: TaskCommands;
 }
 
 /** Показывает состояние выполнения, ожидание и доступные команды остановки/продолжения. */
-export function TaskStatus({ snapshot, connected, commands }: TaskStatusProps): ReactElement {
+export function TaskStatus({
+  snapshot,
+  connected,
+  connectionReady,
+  commands,
+}: TaskStatusProps): ReactElement {
   const now = useClock();
   const pending = snapshot.state.activeAttempt;
   const age = pending ? Math.max(0, Math.floor((now - Date.parse(pending.startedAt)) / 1000)) : 0;
@@ -76,7 +82,7 @@ export function TaskStatus({ snapshot, connected, commands }: TaskStatusProps): 
           <p>
             {snapshot.actions.resumeRequiresExplicitRetry
               ? "Исход предыдущего вызова неизвестен. Повтор создаст новый вызов модели и потратит ещё одну попытку."
-              : "Продолжение начнётся с сохранённого этапа."}
+              : "Данные и завершённые этапы сохранены. После входа в Codex и проверки подключения нажмите «Продолжить». Сбойный этап начнётся заново и потратит ещё одну попытку; готовые этапы повторяться не будут."}
           </p>
           <div className="notice-actions">
             <button
@@ -84,7 +90,7 @@ export function TaskStatus({ snapshot, connected, commands }: TaskStatusProps): 
                 // Явно подтверждает продолжение или повтор неизвестного вызова.
                 void commands.resume(snapshot);
               }}
-              disabled={busy}
+              disabled={busy || !connectionReady}
             >
               {snapshot.actions.resumeRequiresExplicitRetry
                 ? "Повторить неизвестный вызов"

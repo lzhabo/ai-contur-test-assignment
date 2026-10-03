@@ -244,20 +244,25 @@ it("повтор неизвестного исхода без входа не р
   expect(f.mockRun).toHaveBeenCalledTimes(1);
 });
 
-it("известная ошибка входа во время вызова сохраняет error без предложения повторить неизвестный исход", async () => {
+it("известная ошибка входа во время вызова сохраняет паузу для продолжения после входа", async () => {
   const f = await setup({
     loggedIn: true,
     runError: new CodexConnectionError("auth_required", loginMessage),
   });
 
   const { taskId } = await f.service.createTask({ text: "mergeIntervals" });
-  const failed = await waitForTask(f.service, taskId, (value) => value.task.phase === "error");
+  const failed = await waitForTask(
+    f.service,
+    taskId,
+    (value) => value.state.usedModelCalls === 1 && value.state.activeAttempt === null,
+  );
 
   expect(failed.task.stopReason).toBe(loginMessage);
-  expect(failed.actions.canResume).toBe(false);
+  expect(failed.task.phase).toBe("awaiting_auth");
+  expect(failed.actions.canResume).toBe(true);
   expect(failed.actions.resumeRequiresExplicitRetry).toBe(false);
   expect(failed.state.usedModelCalls).toBe(1);
-  expect(failed.events.some((event) => event.type === "task_failed")).toBe(true);
+  expect(failed.events.some((event) => event.type === "phase_changed")).toBe(true);
   expect(failed.events.some((event) => event.type === "unknown_outcome")).toBe(false);
   expect(f.mockRun).toHaveBeenCalledTimes(1);
 });

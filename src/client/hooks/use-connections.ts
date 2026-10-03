@@ -1,10 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { getConnections } from "../api/connections";
 
+export const connectionsKey = ["connections"] as const;
+
 /** Обновляет проверку при открытии, возврате к окну и по команде пользователя. */
 export function useConnections() {
   const query = useQuery({
-    queryKey: ["connections"],
+    queryKey: connectionsKey,
     queryFn: ({ signal }) => getConnections(signal),
     retry: false,
     refetchInterval: 15_000,

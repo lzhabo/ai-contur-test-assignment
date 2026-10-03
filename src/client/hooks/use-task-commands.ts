@@ -1,9 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { TaskSnapshotResponse } from "../../shared/api";
+import type { CodexReadiness } from "../../shared/connections";
 import { createTask, decideTask, resumeTask, stopTask } from "../api/tasks";
-import { errorMessage } from "../api/http";
+import { errorMessage, HttpError } from "../api/http";
 import { acceptSnapshot, taskKeys } from "./task-cache";
+import { connectionsKey } from "./use-connections";
 
 type Command =
   | { type: "create"; text: string; key: string }
@@ -60,10 +62,30 @@ export function useTaskCommands(
   if (selection.current.taskId !== selectedTaskId) {
     selection.current = { taskId: selectedTaskId, generation: selection.current.generation + 1 };
   }
-  const [failure, setFailure] = useState<{ generation: number; message: string } | null>(null);
+  const [failure, setFailure] = useState<{
+    generation: number;
+    message: string;
+    connectionFailure?: boolean;
+  } | null>(null);
   const error = failure?.generation === selection.current.generation ? failure.message : "";
   const [busy, setBusy] = useState(false);
   const mutation = useMutation({ mutationFn: executeCommand, retry: false });
+
+  // Успешная новая проверка снимает только ошибку подключения, сохраняя прочие ошибки команд.
+  useEffect(
+    () =>
+      client.getQueryCache().subscribe((event) => {
+        if (
+          event.type === "updated" &&
+          event.action.type === "success" &&
+          event.query === client.getQueryCache().find({ queryKey: connectionsKey, exact: true }) &&
+          client.getQueryData<CodexReadiness>(connectionsKey)?.ready
+        ) {
+          setFailure((previous) => (previous?.connectionFailure ? null : previous));
+        }
+      }),
+    [client],
+  );
 
   /** Удерживает блокировку до ответа; ошибка оставляет возможность явного повтора. */
   async function perform(command: Command): Promise<void> {
@@ -86,8 +108,14 @@ export function useTaskCommands(
       }
       await client.invalidateQueries({ queryKey: taskKeys.list });
     } catch (cause) {
+      const connectionFailure = cause instanceof HttpError && cause.code === "codex_not_ready";
       if (selection.current.generation === generation) {
-        setFailure({ generation, message: errorMessage(cause) });
+        setFailure({ generation, message: errorMessage(cause), connectionFailure });
+      }
+      if (connectionFailure) {
+        // Проверка, начавшаяся до отказа команды, уже могла прочитать старый вход.
+        await client.cancelQueries({ queryKey: connectionsKey });
+        await client.invalidateQueries({ queryKey: connectionsKey });
       }
     } finally {
       lock.current = false;

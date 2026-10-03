@@ -36,6 +36,11 @@ export async function recoverTasks(runtime: TaskRuntime): Promise<void> {
       });
       continue;
     }
+    if (pendingNode === "pauseAuth" && state.phase === "awaiting_auth") {
+      // Сбой мог случиться между checkpoint отказа и interrupt: сохраняем ожидание без вызова модели.
+      await graph.invoke(null, config(entry.taskId));
+      continue;
+    }
     if (
       pendingNode === "callApplier" &&
       state.activeAttempt &&
@@ -174,6 +179,7 @@ export async function recoverTasks(runtime: TaskRuntime): Promise<void> {
       pendingNode &&
       pendingNode !== "waitApproval" &&
       pendingNode !== "pauseUnknown" &&
+      pendingNode !== "pauseAuth" &&
       !terminal.has(state.phase)
     ) {
       startRun(entry.taskId);

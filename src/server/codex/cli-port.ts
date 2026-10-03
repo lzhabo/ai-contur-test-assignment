@@ -259,9 +259,14 @@ export class CodexCliPort implements CodexPort {
           completed = true;
           return;
         }
-        if (event.type === "error") return fail(providerFailure(event.message));
+        if (event.type === "error") return fail(providerFailure(event.message, this.binary));
         if (event.type === "turn.failed")
-          return fail(providerFailure((event.error as { message?: unknown } | undefined)?.message));
+          return fail(
+            providerFailure(
+              (event.error as { message?: unknown } | undefined)?.message,
+              this.binary,
+            ),
+          );
         if (event.type === "item.completed") {
           const item = event.item as Record<string, unknown> | undefined;
           if (

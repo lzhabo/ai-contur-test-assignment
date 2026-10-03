@@ -7,6 +7,7 @@ export const TaskPhaseSchema = z.enum([
   "checking",
   "review",
   "awaiting_approval",
+  "awaiting_auth",
   "applying",
   "completed",
   "stopped",

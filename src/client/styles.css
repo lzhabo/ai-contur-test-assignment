@@ -843,6 +843,7 @@ pre {
   background: #f3f5ee;
 }
 .workflow-node.stopped,
+.workflow-node.paused,
 .workflow-node.unknown {
   border-color: #c2a15d;
   background: #fbf4e0;

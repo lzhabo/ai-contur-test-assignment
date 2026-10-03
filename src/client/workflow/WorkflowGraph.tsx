@@ -19,7 +19,9 @@ export function WorkflowGraph({ snapshot }: { snapshot: TaskSnapshotResponse }):
             eventStage(event) === selection ||
             (selection === "applier" && event.type === "publication_finished"),
         );
-  const stopped = ["stopped", "error", "unknown_outcome"].includes(snapshot.task.phase);
+  const stopped = ["stopped", "error", "unknown_outcome", "awaiting_auth"].includes(
+    snapshot.task.phase,
+  );
 
   /** Выбирает этап и убирает выделение события прежнего фильтра. */
   function selectStage(stage: StageId): void {
@@ -52,11 +54,13 @@ export function WorkflowGraph({ snapshot }: { snapshot: TaskSnapshotResponse }):
       </p>
       {stopped && (
         <p className="workflow-state" role="status">
-          {snapshot.task.phase === "unknown_outcome"
-            ? "Процесс приостановлен: исход вызова неизвестен."
-            : snapshot.task.phase === "error"
-              ? "Процесс завершился ошибкой."
-              : "Процесс остановлен."}{" "}
+          {snapshot.task.phase === "awaiting_auth"
+            ? "Процесс приостановлен: нужен вход в Codex. Выполненные этапы сохранены."
+            : snapshot.task.phase === "unknown_outcome"
+              ? "Процесс приостановлен: исход вызова неизвестен."
+              : snapshot.task.phase === "error"
+                ? "Процесс завершился ошибкой."
+                : "Процесс остановлен."}{" "}
           Следующие этапы автоматически не выполняются.
         </p>
       )}

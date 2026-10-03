@@ -78,6 +78,7 @@ export function App(): ReactElement {
               key={workspace.taskId}
               snapshot={task.snapshot}
               connected={task.connected}
+              connectionReady={connections.ready}
               commands={commands}
             />
           )}

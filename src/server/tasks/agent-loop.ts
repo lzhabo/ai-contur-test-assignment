@@ -22,6 +22,7 @@ function buildGraph(checkpointPath: string, hooks: AgentHooks) {
     .addNode("callReviewer", observedNode("callReviewer", steps.callReviewer))
     .addNode("waitApproval", observedNode("waitApproval", steps.waitApproval))
     .addNode("pauseUnknown", observedNode("pauseUnknown", steps.pauseUnknown))
+    .addNode("pauseAuth", observedNode("pauseAuth", steps.pauseAuth))
     .addNode("prepareApplier", observedNode("prepareApplier", steps.prepareApplier))
     .addNode("callApplier", observedNode("callApplier", steps.callApplier))
     .addEdge(START, "prepareAuthor")
@@ -32,12 +33,16 @@ function buildGraph(checkpointPath: string, hooks: AgentHooks) {
     )
     .addConditionalEdges(
       "callAuthor",
-      /* Направляет новую версию на проверку, а неизвестный исход — на паузу. */ (state) =>
+      /* Направляет новую версию на проверку, а неизвестный исход и отказ входа — на паузу. */ (
+        state,
+      ) =>
         state.value.phase === "checking"
           ? "check"
           : state.value.phase === "unknown_outcome"
             ? "pauseUnknown"
-            : END,
+            : state.value.phase === "awaiting_auth"
+              ? "pauseAuth"
+              : END,
     )
     .addConditionalEdges(
       "check",
@@ -58,7 +63,9 @@ function buildGraph(checkpointPath: string, hooks: AgentHooks) {
             ? "prepareAuthor"
             : state.value.phase === "unknown_outcome"
               ? "pauseUnknown"
-              : END,
+              : state.value.phase === "awaiting_auth"
+                ? "pauseAuth"
+                : END,
     )
     .addConditionalEdges(
       "waitApproval",
@@ -77,14 +84,31 @@ function buildGraph(checkpointPath: string, hooks: AgentHooks) {
               : "prepareAuthor",
     )
     .addConditionalEdges(
+      "pauseAuth",
+      /* Возобновляет только роль, остановленную отсутствием входа. */ (state) =>
+        state.value.phase === "stopped"
+          ? END
+          : state.value.lastAttempt?.role === "reviewer"
+            ? "prepareReviewer"
+            : state.value.lastAttempt?.role === "applier"
+              ? "prepareApplier"
+              : "prepareAuthor",
+    )
+    .addConditionalEdges(
       "prepareApplier",
       /* Вызывает применяющего агента после резервирования бюджета. */ (state) =>
         state.value.phase === "stopped" ? END : "callApplier",
     )
     .addConditionalEdges(
       "callApplier",
-      /* Оставляет неизвестный исход публикации на паузе, остальные исходы завершает. */ (state) =>
-        state.value.phase === "unknown_outcome" ? "pauseUnknown" : END,
+      /* Ожидает решения при неизвестном исходе или отсутствующем входе; остальные исходы завершает. */ (
+        state,
+      ) =>
+        state.value.phase === "unknown_outcome"
+          ? "pauseUnknown"
+          : state.value.phase === "awaiting_auth"
+            ? "pauseAuth"
+            : END,
     );
   return graph.compile({
     checkpointer: observedSqliteSaver(

@@ -57,3 +57,12 @@ it("рендер явно показывает незавершённое рев
 
   expect(html).toContain("Ревью ещё не завершено");
 });
+
+it("пауза из-за входа объясняет сохранение этапов вместо окончательного завершения ошибкой", () => {
+  const data = snapshot([], "awaiting_auth");
+
+  const html = renderToStaticMarkup(<WorkflowGraph snapshot={data} />);
+
+  expect(html).toContain("Процесс приостановлен: нужен вход в Codex. Выполненные этапы сохранены.");
+  expect(html).not.toContain("Процесс завершился ошибкой.");
+});

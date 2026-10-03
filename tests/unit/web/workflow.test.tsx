@@ -126,4 +126,25 @@ describe("отображение истории работы агентов", ()
       )?.status,
     ).toBe("observed");
   });
+
+  it("ожидание входа сохраняет готовые этапы без признака работающего агента", () => {
+    const data = snapshot(
+      [
+        event(1, "version_created", { from: "author", artifactVersionId: "v1" }),
+        event(2, "checks_finished"),
+        event(3, "attempt_started", { from: "reviewer", attemptId: "review" }),
+        event(4, "phase_changed", { attemptId: "review", text: "Выполните codex login" }),
+      ],
+      "awaiting_auth",
+    );
+
+    const view = workflowView(data);
+
+    expect(view.stages.find((stage) => stage.id === "author")?.status).toBe("observed");
+    expect(view.stages.find((stage) => stage.id === "checks")?.status).toBe("observed");
+    expect(view.current).toBe("reviewer");
+    expect(view.stages.find((stage) => stage.id === "reviewer")?.status).toBe("paused");
+    expect(view.stages.some((stage) => stage.status === "active")).toBe(false);
+    expect(view.versions).toEqual(["v1"]);
+  });
 });

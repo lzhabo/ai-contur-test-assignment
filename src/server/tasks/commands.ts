@@ -13,6 +13,7 @@ import {
 import { stateSummary } from "../logger.js";
 import { ApprovalSchema, TaskStateSchema, type Approval, type TaskState } from "./types.js";
 
+import { isLegacyAuthFailure, taskStopReason } from "./auth-resume.js";
 import { ServiceError } from "./errors.js";
 import { requireCodexReady } from "./connections.js";
 import { now, terminal, type TaskRuntime } from "./runtime.js";
@@ -303,7 +304,7 @@ export function createTaskCommands(runtime: TaskRuntime, view: TaskView): TaskCo
       /* Выполняет остановку после предыдущей команды. */ () => stopInternal(taskId),
     );
 
-  /** Разрешает только явный повтор неизвестного исхода в исходном режиме модели. */
+  /** Продолжает сохранённую роль после входа либо явно повторяет неизвестный исход. */
   async function resumeInternal(
     taskId: string,
     input: ResumeRequest,
@@ -315,10 +316,35 @@ export function createTaskCommands(runtime: TaskRuntime, view: TaskView): TaskCo
         "mode_mismatch",
         "Режим сохранённой задачи отличается от текущего режима сервера.",
       );
-    if (state.phase !== "unknown_outcome" || parsed.mode !== "retry_unknown")
-      throw new ServiceError("resume_not_allowed", "Нужен явный повтор неизвестного вызова.");
+    const legacyAuth = isLegacyAuthFailure(state);
+    const continueAuth =
+      (state.phase === "awaiting_auth" || legacyAuth) && parsed.mode === "continue";
+    const retryUnknown = state.phase === "unknown_outcome" && parsed.mode === "retry_unknown";
+    if (!continueAuth && !retryUnknown)
+      throw new ServiceError(
+        "resume_not_allowed",
+        "Эту задачу нельзя продолжить выбранной командой.",
+      );
+    const activeTaskId = (await listTasks()).activeTaskId;
+    if (activeTaskId && activeTaskId !== taskId)
+      throw new ServiceError("active_task", "Сначала завершите текущую задачу.");
     if (activeRuns.has(taskId)) throw new ServiceError("task_running", "Задача ещё выполняется.");
     await requireCodexReady(ports.codex, executionMode);
+    if (continueAuth && state.currentArtifact)
+      await ports.artifacts.verifyVersion(state.currentArtifact);
+    if (legacyAuth) {
+      const paused: TaskState = {
+        ...state,
+        phase: "awaiting_auth",
+        stopReason: taskStopReason(state),
+        updatedAt: now(),
+      };
+      const role = state.lastAttempt!.role;
+      const node =
+        role === "author" ? "callAuthor" : role === "reviewer" ? "callReviewer" : "callApplier";
+      await graph.updateState(config(taskId), { value: paused }, node);
+      await graph.invoke(null, config(taskId));
+    }
     startRun(taskId, new Command({ resume: { retry: true } }));
     await logger.record({
       event: "resume_requested",

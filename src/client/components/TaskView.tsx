@@ -9,15 +9,22 @@ import { TaskProposal } from "./TaskProposal";
 export function TaskView({
   snapshot,
   connected,
+  connectionReady,
   commands,
 }: {
   snapshot: TaskSnapshotResponse;
   connected: boolean;
+  connectionReady: boolean;
   commands: TaskCommands;
 }): ReactElement {
   return (
     <>
-      <TaskStatus snapshot={snapshot} connected={connected} commands={commands} />
+      <TaskStatus
+        snapshot={snapshot}
+        connected={connected}
+        connectionReady={connectionReady}
+        commands={commands}
+      />
       <WorkflowGraph snapshot={snapshot} />
       <TaskProposal snapshot={snapshot} commands={commands} />
       <p className="footer-note">

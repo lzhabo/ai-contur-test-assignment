@@ -212,6 +212,7 @@ export function createRoleCalls(hooks: AgentHooks): RoleCalls {
   /** Различает остановку, известную ошибку и неизвестный исход, требующий явного повтора. */
   async function failed(state: TaskState, error: unknown): Promise<TaskState> {
     const stopped = hooks.isStopRequested(state.taskId);
+    const authRequired = error instanceof CodexConnectionError && error.code === "auth_required";
     const known =
       error instanceof KnownAgentError ||
       error instanceof ZodError ||
@@ -228,7 +229,13 @@ export function createRoleCalls(hooks: AgentHooks): RoleCalls {
       : null;
     const next: TaskState = {
       ...state,
-      phase: stopped ? "stopped" : known ? "error" : "unknown_outcome",
+      phase: stopped
+        ? "stopped"
+        : authRequired
+          ? "awaiting_auth"
+          : known
+            ? "error"
+            : "unknown_outcome",
       stopReason: stopped
         ? "Остановлено пользователем."
         : known
@@ -240,7 +247,13 @@ export function createRoleCalls(hooks: AgentHooks): RoleCalls {
     };
     await emit(
       next,
-      stopped ? "task_stopped" : known ? "task_failed" : "unknown_outcome",
+      stopped
+        ? "task_stopped"
+        : authRequired
+          ? "phase_changed"
+          : known
+            ? "task_failed"
+            : "unknown_outcome",
       next.stopReason ?? reason,
       `${attempt?.attemptId ?? "task"}:failure`,
       { attemptId: attempt?.attemptId ?? null },

@@ -15,12 +15,13 @@
     "test": "vitest run",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test --config tests/e2e/playwright.config.ts",
+    "test:e2e:auth": "playwright test --config tests/e2e/login-logout.config.ts",
     "test:live-review": "node --import tsx tests/live/review-feedback.probe.ts",
     "test:workflow-probe": "node --import tsx tests/unit/workflow/sqlite-resume.probe.ts",
     "lint": "eslint src tests --max-warnings 0",
     "format:check": "prettier --check src tests --ignore-path .prettierignore",
     "check": "npm run lint && npm run typecheck && npm test && npm run build",
-    "check:full": "npm run check && npm run format:check && npm run test:e2e && QA_REAL_CODEX=1 npm run test:e2e && npm run test:live-review"
+    "check:full": "npm run check && npm run format:check && npm run test:e2e:auth && npm run test:e2e && QA_REAL_CODEX=1 npm run test:e2e && npm run test:live-review"
   },
   "dependencies": {
     "@langchain/core": "1.2.12",

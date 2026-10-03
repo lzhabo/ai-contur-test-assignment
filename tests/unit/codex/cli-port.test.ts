@@ -17,11 +17,11 @@ afterEach(async () => {
 // Создаёт временный исполняемый mock Codex CLI, который воспроизводит заданное поведение процесса.
 async function mockCli(
   body: string | ((root: string) => string),
-  options: { auth?: string; version?: string } = {},
+  options: { auth?: string; version?: string; binaryName?: string } = {},
 ): Promise<{ binary: string; root: string }> {
   const root = await mkdtemp(path.join(os.tmpdir(), "mock-codex-"));
   roots.push(root);
-  const binary = path.join(root, "codex");
+  const binary = path.join(root, options.binaryName ?? "codex");
   await writeFile(
     binary,
     `#!/usr/bin/env node\nif (process.argv[2] === '--version') { ${options.version ?? "console.log('codex-cli 0.156.1'); process.exit(0);"} } else if (process.argv[2] === 'login') { ${options.auth ?? "console.error('Logged in using ChatGPT'); process.exit(0);"} } else {\n${typeof body === "string" ? body : body(root)}\n}\n`,
@@ -78,9 +78,24 @@ describe("взаимодействие с Codex CLI", () => {
       }),
     ).rejects.toMatchObject({
       code: "auth_required",
-      message: expect.stringContaining("codex login"),
+      message: expect.stringContaining(`${binary} login`),
     });
-    expect((await cli.checkReadiness()).checks[1]?.status).toBe("failed");
+    expect((await cli.checkReadiness()).checks[1]).toMatchObject({
+      status: "failed",
+      message: expect.stringContaining(`${binary} login`),
+    });
+  });
+
+  it("экранирует нестандартный путь CLI в команде повторного входа", async () => {
+    const { binary, root } = await mockCli("throw new Error('exec must not run')", {
+      binaryName: "codex user's $& cli",
+      auth: "console.error('Not logged in'); process.exit(1);",
+    });
+
+    const readiness = await new CodexCliPort(binary).checkReadiness();
+
+    expect(readiness.ready).toBe(false);
+    expect(readiness.checks[1]?.message).toContain(`'${root}/codex user'\\''s $& cli' login`);
   });
 
   it.each([
@@ -161,7 +176,10 @@ describe("взаимодействие с Codex CLI", () => {
         })
         .catch((error: unknown) => error);
 
-      expect(failure).toMatchObject({ code, message: expect.stringContaining(action) });
+      expect(failure).toMatchObject({
+        code,
+        message: expect.stringContaining(status === 401 ? `${binary} login` : action),
+      });
       expect(String(failure)).not.toContain("secret-private-text");
     },
   );
@@ -263,9 +281,7 @@ describe("взаимодействие с Codex CLI", () => {
       code: "auth_required",
       message: expect.stringContaining("codex login"),
     });
-    await expect(running).rejects.toThrow(
-      "Если задача уже завершилась ошибкой, после входа создайте её заново.",
-    );
+    await expect(running).rejects.toThrow("Если задача ожидает входа, нажмите «Продолжить».");
   });
 
   it.each([

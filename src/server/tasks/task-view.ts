@@ -8,6 +8,7 @@ import {
 } from "../../shared/api.js";
 import { type TaskState } from "./types.js";
 
+import { isLegacyAuthFailure, taskStopReason } from "./auth-resume.js";
 import { ServiceError } from "./errors.js";
 import { now, terminal, type TaskRuntime } from "./runtime.js";
 import type { AppService } from "./service.js";
@@ -109,7 +110,7 @@ export function createTaskView(runtime: TaskRuntime): TaskView {
       stopReason:
         modeMismatch && !terminal.has(state.phase)
           ? `Задача сохранена в режиме ${state.executionMode}; текущий сервер запущен в режиме ${executionMode}. Для продолжения вернитесь к исходному режиму.`
-          : state.stopReason,
+          : taskStopReason(state),
     };
     return TaskSnapshotResponseSchema.parse({
       task: summary,
@@ -148,7 +149,11 @@ export function createTaskView(runtime: TaskRuntime): TaskView {
       actions: {
         canStop: !terminal.has(state.phase),
         canDecide,
-        canResume: state.phase === "unknown_outcome" && !modeMismatch,
+        canResume:
+          !modeMismatch &&
+          (state.phase === "unknown_outcome" ||
+            state.phase === "awaiting_auth" ||
+            isLegacyAuthFailure(state)),
         resumeRequiresExplicitRetry: state.phase === "unknown_outcome",
       },
       files,
@@ -175,7 +180,7 @@ export function createTaskView(runtime: TaskRuntime): TaskView {
         stopReason:
           modeMismatch && !terminal.has(state.phase)
             ? `Задача сохранена в режиме ${state.executionMode}; текущий сервер запущен в режиме ${executionMode}.`
-            : state.stopReason,
+            : taskStopReason(state),
       });
       if (!terminal.has(state.phase)) activeTaskId = entry.taskId;
     }

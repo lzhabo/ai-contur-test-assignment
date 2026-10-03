@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import type { CodexReadiness } from "../../shared/connections.js";
-import { CodexConnectionError } from "./connection-error.js";
+import { CodexConnectionError, loginRequired } from "./connection-error.js";
 
 /** Завершает всю группу, включая потомков, которые могут удерживать открытые потоки. */
 export function killGroup(pid: number | undefined): void {
@@ -96,7 +96,7 @@ export async function inspectCli(
     check = readiness.checks[1]!;
     const auth = await command(binary, ["login", "status"], signal, deadline);
     const status = `${auth.stdout}\n${auth.stderr}`;
-    if (/^Not logged in\s*$/im.test(status)) throw new CodexConnectionError("auth_required");
+    if (/^Not logged in\s*$/im.test(status)) throw loginRequired(binary);
     if (auth.code !== 0 || !/^Logged in using (?:ChatGPT|an API key)\b/im.test(status))
       throw new CodexConnectionError("connection_check_failed");
     check.status = "passed";

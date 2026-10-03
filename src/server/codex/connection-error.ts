@@ -8,7 +8,7 @@ export type CodexConnectionErrorCode =
 
 const messages: Record<CodexConnectionErrorCode, string> = {
   auth_required:
-    "Вход в Codex CLI отсутствует или истёк. Выполните codex login в терминале на компьютере сервера, затем нажмите «Проверить снова». Если задача уже завершилась ошибкой, после входа создайте её заново.",
+    "Вход в Codex CLI отсутствует или истёк. Выполните codex login в терминале на компьютере сервера, затем нажмите «Проверить снова». Если задача ожидает входа, нажмите «Продолжить».",
   cli_unavailable:
     "Codex CLI не найден или не запускается. Установите CLI и проверьте путь к нему на компьютере сервера, затем повторите проверку.",
   cli_incompatible:
@@ -32,11 +32,22 @@ export class CodexConnectionError extends Error {
   }
 }
 
+/** Направляет пользователя к тому же CLI; экранирует путь для вставки команды в терминал. */
+export function loginRequired(binary: string): CodexConnectionError {
+  const command = /^[a-zA-Z0-9_./-]+$/.test(binary)
+    ? binary
+    : `'${binary.replaceAll("'", "'\\''")}'`;
+  return new CodexConnectionError(
+    "auth_required",
+    messages.auth_required.replace("codex login", () => `${command} login`),
+  );
+}
+
 /** Распознаёт только явные отказы провайдера; сетевой обрыв сохраняет неизвестный исход. */
-export function providerFailure(raw: unknown): Error {
+export function providerFailure(raw: unknown, binary = "codex"): Error {
   const text = typeof raw === "string" ? raw : "";
   if (/\b401\b|\bunauthorized\b|\binvalid_api_key\b|\bauthentication_error\b/i.test(text))
-    return new CodexConnectionError("auth_required");
+    return loginRequired(binary);
   if (/\b403\b|\bforbidden\b|\bpermission_denied\b/i.test(text))
     return new CodexConnectionError("access_denied");
   if (/\b429\b|\brate_limit_exceeded\b|\binsufficient_quota\b/i.test(text))
